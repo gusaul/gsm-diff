@@ -310,6 +310,43 @@ body {
   display: block;
 }
 
+.auth-warning-banner {
+  background: var(--del-bg);
+  border: 1px solid #f6aea9;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.terminal-command {
+  display: block;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  color: var(--primary);
+  user-select: all;
+}
+
+.text-input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 12px;
+  font-family: 'Roboto Mono', monospace;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--primary);
+  background: var(--bg-main);
+}
+
 .popup-footer {
   margin-top: auto;
   padding: 8px 16px;
@@ -325,3 +362,4 @@ body {
   color: var(--primary);
   text-decoration: none;
 }
+

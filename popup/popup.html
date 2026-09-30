@@ -23,6 +23,7 @@
 
     <nav class="popup-tabs">
       <button class="tab-btn active" data-tab="tab-console">Console View</button>
+      <button class="tab-btn" data-tab="tab-auth">Auth & Setup</button>
       <button class="tab-btn" data-tab="tab-quickdiff">Quick Diff Tool</button>
     </nav>
 
@@ -51,12 +52,55 @@
         </button>
       </div>
 
-      <div class="tips-box">
-        <strong>💡 Pro-Tip:</strong> On any Secret Manager Versions page, check any 2 versions using the checkboxes to open the side-by-side comparison modal!
+      <!-- Auth Warning Banner (Shown only when auth is missing) -->
+      <div class="auth-warning-banner" id="auth-warning-banner" style="display: none;">
+        <strong>⚠️ Console Auth Token Missing</strong>
+        <p style="font-size: 11.5px; margin: 4px 0 8px 0; color: var(--text-muted);">
+          Refresh the Google Cloud Console tab to capture the session token, or paste a token from terminal.
+        </p>
+        <div style="display: flex; gap: 6px;">
+          <button class="action-btn primary" id="btn-reload-tab" style="flex: 1; padding: 6px 10px; font-size: 11px;">
+            🔄 Reload GCP Tab
+          </button>
+          <button class="action-btn secondary" id="btn-go-auth-tab" style="padding: 6px 10px; font-size: 11px;">
+            🔑 Paste Token
+          </button>
+        </div>
+      </div>
+
+      <div class="tips-box" style="margin-top: 10px;">
+        <strong>💡 How to compare:</strong> On any Secret Manager Versions page, check any 2 versions using the checkboxes to open the side-by-side comparison modal!
       </div>
     </main>
 
-    <!-- Tab 2: Quick Standalone Diff Tool -->
+    <!-- Tab 2: Authentication & gcloud Token Setup -->
+    <main class="tab-content" id="tab-auth">
+      <div class="card">
+        <div class="card-title">Console Session Token</div>
+        <p style="font-size: 12px; margin-bottom: 10px; line-height: 1.4;">
+          GSM Diff captures your OAuth token directly from Google Cloud Console network traffic. If the tab was open before installing the extension, reload the tab:
+        </p>
+        <button class="action-btn secondary" id="btn-auth-reload-tab" style="width: 100%;">
+          🔄 Reload Current GCP Tab
+        </button>
+      </div>
+
+      <div class="card" style="margin-top: 10px;">
+        <div class="card-title">Or Use gcloud Access Token</div>
+        <p style="font-size: 12px; margin-bottom: 6px; line-height: 1.4;">
+          Run in your local terminal:
+        </p>
+        <code class="terminal-command">gcloud auth print-access-token</code>
+        <div style="margin-top: 8px;">
+          <input type="password" id="input-manual-token" class="text-input" placeholder="Paste ya29... token here">
+          <button class="action-btn primary" id="btn-save-manual-token" style="width: 100%; margin-top: 6px;">
+            💾 Save Token (Active for 1 hour)
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 3: Quick Standalone Diff Tool -->
     <main class="tab-content" id="tab-quickdiff">
       <div class="quickdiff-inputs">
         <div class="input-col">
@@ -88,7 +132,7 @@
     </main>
 
     <footer class="popup-footer">
-      <span>GSM Diff v1.0.0</span>
+      <span>GSM Diff v1.0.1</span>
       <a href="https://cloud.google.com/secret-manager" target="_blank" class="footer-link">GCP Docs</a>
     </footer>
   </div>

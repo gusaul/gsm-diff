@@ -715,39 +715,198 @@
   }
 
   /**
-   * Render Error and Manual Fallback State
+   * Automate DOM clicks to fetch secret value via Console's 'View secret value' dialog
+   */
+  async function autoFetchViaDom(targetVersion) {
+    const rows = Array.from(document.querySelectorAll('mat-row, tr, div[role="row"]'));
+    let targetRow = null;
+    for (const r of rows) {
+      const text = r.textContent;
+      if (text.includes(`Version ${targetVersion}`) || text.match(new RegExp(`\\b${targetVersion}\\b`))) {
+        targetRow = r;
+        break;
+      }
+    }
+
+    if (!targetRow) {
+      throw new Error(`Could not locate table row for Version ${targetVersion}.`);
+    }
+
+    // Find action button on row
+    const actionBtn = targetRow.querySelector('button[aria-label*="Action"], button[aria-label*="More"], mat-icon, cfc-icon')?.closest('button') || targetRow.querySelector('button');
+    if (!actionBtn) {
+      throw new Error(`Could not find Actions button on row for Version ${targetVersion}.`);
+    }
+
+    actionBtn.click();
+    await new Promise(r => setTimeout(r, 450));
+
+    // Look for menu item with "View secret value"
+    const menuItems = Array.from(document.querySelectorAll('button[role="menuitem"], .mat-menu-item, .cfc-menu-item, div[role="menuitem"]'));
+    const viewItem = menuItems.find(el => el.textContent.toLowerCase().includes('view secret value'));
+    if (!viewItem) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      throw new Error('Menu opened, but "View secret value" option was not found.');
+    }
+
+    viewItem.click();
+    await new Promise(r => setTimeout(r, 800));
+
+    // Wait for dialog
+    const dialog = document.querySelector('mat-dialog-container, div[role="dialog"]');
+    if (!dialog) {
+      throw new Error('Secret value dialog did not open.');
+    }
+
+    // Extract value from dialog
+    let secretText = '';
+    const textarea = dialog.querySelector('textarea, pre, code');
+    if (textarea) {
+      secretText = textarea.value || textarea.textContent;
+    } else {
+      const contentEl = dialog.querySelector('.mat-dialog-content, div[class*="content"]') || dialog;
+      secretText = contentEl.textContent.trim();
+    }
+
+    // Close dialog
+    const closeBtn = Array.from(dialog.querySelectorAll('button')).find(b => {
+      const t = b.textContent.toLowerCase();
+      return t.includes('done') || t.includes('close') || t.includes('ok');
+    });
+
+    if (closeBtn) {
+      closeBtn.click();
+    } else {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    }
+
+    await new Promise(r => setTimeout(r, 400));
+    return secretText;
+  }
+
+  /**
+   * Render Error and Resolution State
    */
   function renderErrorState(errorMessage, project, secret, verA, verB) {
     const container = modalElement?.querySelector('#gsm-modal-content');
     if (!container) return;
 
     container.innerHTML = `
-      <div class="gsm-error-state">
-        <div class="gsm-error-box">
-          <strong>Unable to automatically fetch secret value:</strong><br>
-          ${escapeHtml(errorMessage)}
-        </div>
-        <p style="margin-top: 10px; font-size: 13px;">
-          You can paste the values manually below to compute the comparison right now:
-        </p>
-
-        <div class="gsm-manual-inputs">
-          <div class="gsm-manual-pane">
-            <label style="font-weight: 600; font-size: 12px;">Version ${verA} Value:</label>
-            <textarea class="gsm-textarea" id="gsm-manual-val-a" placeholder="Paste Version ${verA} payload here..."></textarea>
-          </div>
-          <div class="gsm-manual-pane">
-            <label style="font-weight: 600; font-size: 12px;">Version ${verB} Value:</label>
-            <textarea class="gsm-textarea" id="gsm-manual-val-b" placeholder="Paste Version ${verB} payload here..."></textarea>
-          </div>
+      <div class="gsm-error-state" style="max-width: 900px; margin: 0 auto; text-align: left;">
+        <div class="gsm-error-box" style="width: 100%; margin-bottom: 16px;">
+          <strong>Unable to automatically fetch secret values via API:</strong><br>
+          <span style="font-size: 12px; opacity: 0.95;">${escapeHtml(errorMessage)}</span>
         </div>
 
-        <button class="gsm-btn gsm-btn-primary" id="gsm-btn-compare-manual" style="margin-top: 14px;">
-          ⚡ Compare Pasted Values
-        </button>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; margin-bottom: 16px;">
+          <!-- Option 1: DOM Auto-Fetch -->
+          <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <strong style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                ⚡ Try UI Auto-Fetch (No Token Needed)
+              </strong>
+              <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 6px 0 12px 0;">
+                Automatically opens the console's "View secret value" dialog for Version ${verA} and Version ${verB} to extract values.
+              </p>
+            </div>
+            <button class="gsm-btn gsm-btn-primary" id="gsm-btn-try-dom-autofetch" style="width: 100%;">
+              ⚡ Run UI Auto-Fetch
+            </button>
+          </div>
+
+          <!-- Option 2: Reload Page -->
+          <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <strong style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                🔄 Reload Page to Capture Token
+              </strong>
+              <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 6px 0 12px 0;">
+                Google Cloud Console sends authentication tokens during page load. Reloading the tab allows the extension to capture it.
+              </p>
+            </div>
+            <button class="gsm-btn gsm-btn-secondary" id="gsm-btn-reload-page" style="width: 100%;">
+              🔄 Reload Tab
+            </button>
+          </div>
+        </div>
+
+        <!-- Option 3: gcloud token input -->
+        <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; width: 100%; margin-bottom: 16px;">
+          <strong style="font-size: 13px;">🔑 Or Paste gcloud Access Token</strong>
+          <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 4px 0 8px 0;">
+            Run <code style="background: var(--gsm-bg-surface); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--gsm-border); font-family: var(--gsm-font-mono);">gcloud auth print-access-token</code> in terminal and paste below:
+          </p>
+          <div style="display: flex; gap: 8px;">
+            <input type="password" id="gsm-modal-input-token" placeholder="Paste ya29... access token" style="flex: 1; padding: 6px 10px; font-family: var(--gsm-font-mono); font-size: 12px; border: 1px solid var(--gsm-border); border-radius: 6px; background: var(--gsm-bg-surface); color: var(--gsm-text-main); outline: none;">
+            <button class="gsm-btn gsm-btn-primary" id="gsm-btn-save-modal-token">
+              Save & Compare
+            </button>
+          </div>
+        </div>
+
+        <!-- Option 4: Manual Textarea Paste -->
+        <div style="width: 100%;">
+          <strong style="font-size: 13px;">📝 Or Paste Secret Payloads Manually</strong>
+          <div class="gsm-manual-inputs" style="margin-top: 8px;">
+            <div class="gsm-manual-pane">
+              <label style="font-weight: 600; font-size: 11.5px;">Version ${verA} Value:</label>
+              <textarea class="gsm-textarea" id="gsm-manual-val-a" placeholder="Paste Version ${verA} payload here..."></textarea>
+            </div>
+            <div class="gsm-manual-pane">
+              <label style="font-weight: 600; font-size: 11.5px;">Version ${verB} Value:</label>
+              <textarea class="gsm-textarea" id="gsm-manual-val-b" placeholder="Paste Version ${verB} payload here..."></textarea>
+            </div>
+          </div>
+
+          <button class="gsm-btn gsm-btn-secondary" id="gsm-btn-compare-manual" style="margin-top: 10px; width: 100%;">
+            Compare Pasted Values
+          </button>
+        </div>
       </div>
     `;
 
+    // Handler 1: UI Auto-Fetch
+    container.querySelector('#gsm-btn-try-dom-autofetch')?.addEventListener('click', async () => {
+      const btn = container.querySelector('#gsm-btn-try-dom-autofetch');
+      btn.disabled = true;
+      btn.textContent = 'Fetching Version ' + verA + ' via UI...';
+      try {
+        const vA = await autoFetchViaDom(verA);
+        btn.textContent = 'Fetching Version ' + verB + ' via UI...';
+        const vB = await autoFetchViaDom(verB);
+
+        secretValueCache.set(`${project}/${secret}/${verA}`, vA);
+        secretValueCache.set(`${project}/${secret}/${verB}`, vB);
+        renderActiveDiff(vA, vB, verA, verB);
+      } catch (domErr) {
+        alert('UI Auto-Fetch failed: ' + domErr.message + '\nPlease use the gcloud token or manual paste option.');
+        btn.disabled = false;
+        btn.textContent = '⚡ Run UI Auto-Fetch';
+      }
+    });
+
+    // Handler 2: Reload Page
+    container.querySelector('#gsm-btn-reload-page')?.addEventListener('click', () => {
+      window.location.reload();
+    });
+
+    // Handler 3: gcloud token save
+    container.querySelector('#gsm-btn-save-modal-token')?.addEventListener('click', () => {
+      const tok = container.querySelector('#gsm-modal-input-token')?.value?.trim();
+      if (!tok) {
+        alert('Please enter a valid token (starts with ya29...)');
+        return;
+      }
+      chrome.runtime.sendMessage({ type: 'SET_MANUAL_TOKEN', token: tok }, async (res) => {
+        if (res && res.success) {
+          openDiffModal(project, secret, verA, verB);
+        } else {
+          alert('Failed to save token: ' + (res?.error || 'Unknown error'));
+        }
+      });
+    });
+
+    // Handler 4: Manual Paste
     container.querySelector('#gsm-btn-compare-manual')?.addEventListener('click', () => {
       const mA = container.querySelector('#gsm-manual-val-a').value;
       const mB = container.querySelector('#gsm-manual-val-b').value;
@@ -822,6 +981,45 @@
       }
       const sorted = [...availableVersions].sort((a, b) => Number(b.id) - Number(a.id));
       openDiffModal(context.project, context.secret, sorted[1].id, sorted[0].id);
+    }
+  });
+
+  function base64ToUtf8(str) {
+    try {
+      const binary = atob(str);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch (e) {
+      return atob(str);
+    }
+  }
+
+  // Listen to intercepted events from MAIN world interceptor
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data) return;
+
+    if (event.data.type === 'GSM_DIFF_TOKEN_FOUND' && event.data.token) {
+      chrome.runtime.sendMessage({
+        type: 'SET_MANUAL_TOKEN',
+        token: event.data.token
+      });
+      const badge = dockElement?.querySelector('.gsm-badge');
+      if (badge && !badge.textContent.includes('Selected')) {
+        badge.textContent = 'Auth Active';
+      }
+    } else if (event.data.type === 'GSM_DIFF_PAYLOAD_INTERCEPTED') {
+      const { url, name, base64Data } = event.data;
+      if (base64Data) {
+        const decoded = base64ToUtf8(base64Data);
+        const match = (name || url).match(/versions\/(\d+)/);
+        if (match && currentProject && currentSecret) {
+          const verId = match[1];
+          secretValueCache.set(`${currentProject}/${currentSecret}/${verId}`, decoded);
+        }
+      }
     }
   });
 

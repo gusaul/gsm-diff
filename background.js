@@ -31,58 +31,104 @@ function base64ToUtf8(str) {
   }
 }
 
-// Listen to network requests to intercept the Google Cloud Console Bearer token
-if (chrome.webRequest && chrome.webRequest.onSendHeaders) {
-  chrome.webRequest.onSendHeaders.addListener(
-    (details) => {
-      if (details.requestHeaders) {
-        for (const header of details.requestHeaders) {
-          if (
-            header.name.toLowerCase() === 'authorization' &&
-            header.value &&
-            header.value.startsWith('Bearer ya29.')
-          ) {
-            const token = header.value.replace(/^Bearer\s+/i, '');
-            if (token !== cachedToken) {
-              cachedToken = token;
-              tokenCapturedTime = Date.now();
-              // Store in session storage so other contexts (popup, etc.) can access status
-              if (chrome.storage && chrome.storage.session) {
-                chrome.storage.session.set({
-                  gcpAccessToken: token,
-                  tokenCapturedTime: tokenCapturedTime
-                });
-              }
-            }
-            break;
-          }
-        }
-      }
-    },
-    {
-      urls: [
-        '*://*.clients6.google.com/*',
-        '*://*.googleapis.com/*',
-        '*://console.cloud.google.com/*'
-      ]
-    },
-    ['requestHeaders', 'extraHeaders']
-  );
-}
+// Helper to save token in memory and session/local storage
+async function saveToken(token) {
+  if (!token || typeof token !== 'string') return;
+  const clean = token.trim().replace(/^Bearer\s+/i, '');
+  if (!clean.startsWith('ya29.')) return;
 
-// Helper to get active token from memory or session storage
-async function getActiveToken() {
-  if (cachedToken && (Date.now() - tokenCapturedTime < 50 * 60 * 1000)) {
-    return cachedToken;
-  }
-  if (chrome.storage && chrome.storage.session) {
-    const stored = await chrome.storage.session.get(['gcpAccessToken', 'tokenCapturedTime']);
-    if (stored.gcpAccessToken) {
-      cachedToken = stored.gcpAccessToken;
-      tokenCapturedTime = stored.tokenCapturedTime || Date.now();
-      return cachedToken;
+  if (clean !== cachedToken) {
+    cachedToken = clean;
+    tokenCapturedTime = Date.now();
+    console.log('[GSM Diff] Google Cloud OAuth session token captured!');
+
+    if (chrome.storage && chrome.storage.session) {
+      chrome.storage.session.set({
+        gcpAccessToken: clean,
+        tokenCapturedTime: tokenCapturedTime
+      });
+    } else if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({
+        gcpAccessToken: clean,
+        tokenCapturedTime: tokenCapturedTime
+      });
     }
   }
+}
+
+// Intercept headers from all relevant Google domains
+function extractTokenFromHeaders(headers) {
+  if (!headers || !Array.isArray(headers)) return;
+  for (const header of headers) {
+    if (
+      header.name &&
+      header.name.toLowerCase() === 'authorization' &&
+      header.value &&
+      header.value.startsWith('Bearer ya29.')
+    ) {
+      saveToken(header.value);
+      break;
+    }
+  }
+}
+
+const GCP_URL_PATTERNS = [
+  '*://*.clients6.google.com/*',
+  '*://clients6.google.com/*',
+  '*://*.googleapis.com/*',
+  '*://*.google.com/*',
+  '*://console.cloud.google.com/*'
+];
+
+if (chrome.webRequest) {
+  // Listen on both onBeforeSendHeaders and onSendHeaders for maximum capture reliability
+  if (chrome.webRequest.onBeforeSendHeaders) {
+    chrome.webRequest.onBeforeSendHeaders.addListener(
+      (details) => extractTokenFromHeaders(details.requestHeaders),
+      { urls: GCP_URL_PATTERNS },
+      ['requestHeaders', 'extraHeaders']
+    );
+  }
+
+  if (chrome.webRequest.onSendHeaders) {
+    chrome.webRequest.onSendHeaders.addListener(
+      (details) => extractTokenFromHeaders(details.requestHeaders),
+      { urls: GCP_URL_PATTERNS },
+      ['requestHeaders', 'extraHeaders']
+    );
+  }
+}
+
+// Helper to get active token from memory or storage
+async function getActiveToken() {
+  if (cachedToken && (Date.now() - tokenCapturedTime < 55 * 60 * 1000)) {
+    return cachedToken;
+  }
+
+  // Check session storage
+  if (chrome.storage && chrome.storage.session) {
+    try {
+      const stored = await chrome.storage.session.get(['gcpAccessToken', 'tokenCapturedTime']);
+      if (stored.gcpAccessToken) {
+        cachedToken = stored.gcpAccessToken;
+        tokenCapturedTime = stored.tokenCapturedTime || Date.now();
+        return cachedToken;
+      }
+    } catch (e) {}
+  }
+
+  // Check local storage fallback
+  if (chrome.storage && chrome.storage.local) {
+    try {
+      const stored = await chrome.storage.local.get(['gcpAccessToken', 'tokenCapturedTime']);
+      if (stored.gcpAccessToken && (Date.now() - (stored.tokenCapturedTime || 0) < 55 * 60 * 1000)) {
+        cachedToken = stored.gcpAccessToken;
+        tokenCapturedTime = stored.tokenCapturedTime || Date.now();
+        return cachedToken;
+      }
+    } catch (e) {}
+  }
+
   return null;
 }
 
@@ -90,9 +136,11 @@ async function getActiveToken() {
 async function callGcpApi(url, method = 'GET', body = null) {
   const token = await getActiveToken();
   if (!token) {
-    throw new Error(
-      'NO_AUTH_TOKEN: Google Cloud Console session token not detected yet. Please interact with the Secret Manager page or refresh once.'
+    const err = new Error(
+      'NO_AUTH_TOKEN: Google Cloud Console session token not detected yet. Please refresh the Google Cloud Console tab (Cmd+R or F5), or paste a token from `gcloud auth print-access-token`.'
     );
+    err.code = 'NO_AUTH_TOKEN';
+    throw err;
   }
 
   const options = {
@@ -120,13 +168,21 @@ async function callGcpApi(url, method = 'GET', body = null) {
     const message = parsedError?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
     if (res.status === 401) {
       cachedToken = null;
-      throw new Error(`TOKEN_EXPIRED: Your Google Cloud Console session token expired. Please refresh the page. Details: ${message}`);
+      const err = new Error(`TOKEN_EXPIRED: Your Google Cloud Console session token expired. Please refresh the page or run \`gcloud auth print-access-token\`. Details: ${message}`);
+      err.code = 'TOKEN_EXPIRED';
+      throw err;
     } else if (res.status === 403) {
-      throw new Error(`PERMISSION_DENIED: IAM Secret Accessor role ('roles/secretmanager.secretAccessor') is required. Details: ${message}`);
+      const err = new Error(`PERMISSION_DENIED: IAM Secret Accessor role ('roles/secretmanager.secretAccessor') is required to view the secret payload. Details: ${message}`);
+      err.code = 'PERMISSION_DENIED';
+      throw err;
     } else if (res.status === 404) {
-      throw new Error(`NOT_FOUND: The requested secret or version was not found. Details: ${message}`);
+      const err = new Error(`NOT_FOUND: The requested secret or version was not found. Details: ${message}`);
+      err.code = 'NOT_FOUND';
+      throw err;
     } else {
-      throw new Error(`API_ERROR: ${message}`);
+      const err = new Error(`API_ERROR: ${message}`);
+      err.code = 'API_ERROR';
+      throw err;
     }
   }
 
@@ -146,6 +202,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           };
         }
 
+        case 'SET_MANUAL_TOKEN': {
+          const { token } = request;
+          await saveToken(token);
+          return { success: true };
+        }
+
         case 'LIST_SECRET_VERSIONS': {
           const { project, secret } = request;
           const url = `https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(project)}/secrets/${encodeURIComponent(secret)}/versions?pageSize=50`;
@@ -153,7 +215,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return {
             success: true,
             versions: (data.versions || []).map(v => {
-              // Extract version number from "projects/.../secrets/.../versions/1"
               const parts = v.name.split('/');
               const versionNumber = parts[parts.length - 1];
               return {
@@ -183,7 +244,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         case 'COMPARE_SECRET_VERSIONS': {
           const { project, secret, versionA, versionB } = request;
-          // Fetch both versions concurrently
           const [resA, resB] = await Promise.all([
             callGcpApi(`https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(project)}/secrets/${encodeURIComponent(secret)}/versions/${encodeURIComponent(versionA)}:access`),
             callGcpApi(`https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(project)}/secrets/${encodeURIComponent(secret)}/versions/${encodeURIComponent(versionB)}:access`)
@@ -221,10 +281,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     } catch (err) {
       console.error('[GSM Diff ServiceWorker Error]:', err);
-      return { success: false, error: err.message };
+      return { success: false, error: err.message, code: err.code || 'UNKNOWN_ERROR' };
     }
   };
 
   handleAsync().then(sendResponse);
-  return true; // Keep message channel open for async response
+  return true;
 });

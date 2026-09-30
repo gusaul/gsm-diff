@@ -24,14 +24,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentSecret = null;
 
   if (activeTab && activeTab.url) {
-    const url = new URL(activeTab.url);
-    if (url.hostname.includes('console.cloud.google.com')) {
-      currentProject = url.searchParams.get('project');
-      const match = url.pathname.match(/\/security\/secret-manager\/secret\/([^/?#]+)/);
-      if (match) {
-        currentSecret = decodeURIComponent(match[1]);
+    try {
+      const url = new URL(activeTab.url);
+      if (url.hostname.includes('console.cloud.google.com')) {
+        currentProject = url.searchParams.get('project');
+        const match = url.pathname.match(/\/security\/secret-manager\/secret\/([^/?#]+)/);
+        if (match) {
+          currentSecret = decodeURIComponent(match[1]);
+        }
       }
-    }
+    } catch (e) {}
   }
 
   // Update UI with detected context
@@ -62,6 +64,40 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? `https://console.cloud.google.com/security/secret-manager?project=${encodeURIComponent(currentProject)}`
       : 'https://console.cloud.google.com/security/secret-manager';
     chrome.tabs.create({ url: targetUrl });
+  });
+
+  // Reload Tab buttons
+  const reloadActiveTab = () => {
+    if (activeTab && activeTab.id) {
+      chrome.tabs.reload(activeTab.id);
+      window.close();
+    }
+  };
+  document.getElementById('btn-reload-tab')?.addEventListener('click', reloadActiveTab);
+  document.getElementById('btn-auth-reload-tab')?.addEventListener('click', reloadActiveTab);
+
+  // Switch to Auth Tab button
+  document.getElementById('btn-go-auth-tab')?.addEventListener('click', () => {
+    document.querySelector('.tab-btn[data-tab="tab-auth"]')?.click();
+  });
+
+  // Save manual gcloud token
+  document.getElementById('btn-save-manual-token')?.addEventListener('click', () => {
+    const input = document.getElementById('input-manual-token');
+    const token = input?.value?.trim();
+    if (!token) {
+      alert('Please enter a valid token (starts with ya29...)');
+      return;
+    }
+    chrome.runtime.sendMessage({ type: 'SET_MANUAL_TOKEN', token }, (res) => {
+      if (res && res.success) {
+        alert('Access token saved successfully! You can now compare secret versions.');
+        checkAuthStatus();
+        document.querySelector('.tab-btn[data-tab="tab-console"]')?.click();
+      } else {
+        alert('Failed to save token: ' + (res?.error || 'Unknown error'));
+      }
+    });
   });
 
   // Quick Diff Tool Logic
@@ -103,12 +139,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' }, (res) => {
       const dot = document.getElementById('auth-dot');
       const text = document.getElementById('auth-text');
+      const warningBanner = document.getElementById('auth-warning-banner');
+
       if (res && res.hasToken) {
         dot.classList.add('active');
         text.textContent = `Auth Active (${res.ageSeconds}s ago)`;
+        if (warningBanner) warningBanner.style.display = 'none';
       } else {
         dot.classList.remove('active');
         text.textContent = 'No Console Auth';
+        if (warningBanner) warningBanner.style.display = 'block';
       }
     });
   }
