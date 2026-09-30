@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Cloud Console - Secret Manager (Mock Test Page)</title>
+  <link rel="stylesheet" href="../content.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Google Sans', Roboto, -apple-system, sans-serif;
+      background: #f8f9fa;
+      color: #202124;
+      line-height: 1.5;
+    }
+    header.gcp-topbar {
+      background: #ffffff;
+      border-bottom: 1px solid #dadce0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+    }
+    .gcp-logo {
+      font-weight: 500;
+      color: #5f6368;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .gcp-project-select {
+      background: #f1f3f4;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .main-container {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 20px;
+    }
+    .page-header {
+      margin-bottom: 16px;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: #1a73e8;
+      margin-bottom: 6px;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tabs-bar {
+      display: flex;
+      border-bottom: 1px solid #dadce0;
+      margin: 20px 0;
+      gap: 24px;
+    }
+    .tab-item {
+      padding: 10px 4px;
+      color: #5f6368;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab-item.active {
+      color: #1a73e8;
+      border-bottom-color: #1a73e8;
+    }
+    .table-card {
+      background: #ffffff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(60,64,67,0.1);
+    }
+    table.versions-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    table.versions-table th {
+      background: #f8f9fa;
+      padding: 12px 16px;
+      font-weight: 500;
+      color: #5f6368;
+      border-bottom: 1px solid #dadce0;
+    }
+    table.versions-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f3f4;
+      vertical-align: middle;
+    }
+    table.versions-table tr:hover td {
+      background: #f8fafd;
+    }
+    .status-chip {
+      background: #e6f4ea;
+      color: #137333;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      display: inline-block;
+    }
+    .action-icon {
+      color: #5f6368;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 50%;
+    }
+    .action-icon:hover {
+      background: #f1f3f4;
+    }
+    .version-link {
+      color: #1a73e8;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .version-link:hover {
+      text-decoration: underline;
+    }
+    .testing-banner {
+      background: #e8f0fe;
+      border: 1px solid #d2e3fc;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #174ea6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body data-gsm-secret="production-database-config" data-gsm-project="my-gcp-project-prod">
+
+  <header class="gcp-topbar">
+    <div class="gcp-logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#1a73e8">
+        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
+      </svg>
+      <strong>Google Cloud</strong>
+    </div>
+    <div class="gcp-project-select">
+      Project: <strong>my-gcp-project-prod</strong>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <div class="testing-banner">
+      <div>
+        <strong>🧪 GSM Diff Interactive Mock Environment</strong><br>
+        Testing page replicating the Google Cloud Secret Manager versions table.
+        Check 2 versions below or click "⚡ Compare Diff" in the floating dock (bottom right)!
+      </div>
+      <button class="gsm-btn gsm-btn-primary" onclick="window.testOpenModal()">
+        Open Diff Modal Now
+      </button>
+    </div>
+
+    <div class="page-header">
+      <div class="breadcrumb">Secret Manager &gt; Secrets &gt; production-database-config</div>
+      <div class="title-row">
+        <h1>production-database-config</h1>
+      </div>
+    </div>
+
+    <div class="tabs-bar">
+      <div class="tab-item active">Versions</div>
+      <div class="tab-item">Details</div>
+      <div class="tab-item">Permissions</div>
+      <div class="tab-item">Audit Logs</div>
+    </div>
+
+    <div class="table-card">
+      <table class="versions-table">
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>State</th>
+            <th>Created</th>
+            <th>Replication</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Version 3 -->
+          <tr role="row">
+            <td>
+              <a href="/security/secret-manager/secret/production-database-config/versions/3" class="version-link">
+                Version 3
+              </a>
+            </td>
+            <td><span class="status-chip">Enabled</span></td>
+            <td>Sep 30, 2026, 10:45 AM</td>
+            <td>Automatic</td>
+            <td style="text-align: right;">
+              <button class="action-icon" aria-label="Actions for Version 3">⋮</button>
+            </td>
+          </tr>
+
+          <!-- Version 2 -->
+          <tr role="row">
+            <td>
+              <a href="/security/secret-manager/secret/production-database-config/versions/2" class="version-link">
+                Version 2
+              </a>
+            </td>
+            <td><span class="status-chip">Enabled</span></td>
+            <td>Sep 28, 2026, 04:12 PM</td>
+            <td>Automatic</td>
+            <td style="text-align: right;">
+              <button class="action-icon" aria-label="Actions for Version 2">⋮</button>
+            </td>
+          </tr>
+
+          <!-- Version 1 -->
+          <tr role="row">
+            <td>
+              <a href="/security/secret-manager/secret/production-database-config/versions/1" class="version-link">
+                Version 1
+              </a>
+            </td>
+            <td><span class="status-chip">Enabled</span></td>
+            <td>Sep 15, 2026, 09:00 AM</td>
+            <td>Automatic</td>
+            <td style="text-align: right;">
+              <button class="action-icon" aria-label="Actions for Version 1">⋮</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Mock Secret Payloads for Testing -->
+  <script>
+    window.__GSM_MOCK_VALUES__ = {
+      '1': `# Database Configuration v1
+DATABASE_HOST="db-v1.prod.internal"
+PORT=5432
+DB_USER="app_prod_user"
+DB_PASSWORD="sk_test_oldpass9900"
+DEBUG=false
+MAX_CONNECTIONS=50`,
+
+      '2': `# Database Configuration v2
+DATABASE_HOST="db-v2.prod.internal"
+PORT=5432
+DB_USER="app_prod_user"
+DB_PASSWORD="sk_test_newpass4200"
+REDIS_URL="redis://10.0.0.5:6379"
+DEBUG=false
+MAX_CONNECTIONS=100`,
+
+      '3': `# Database Configuration v3
+DATABASE_HOST="db-v2.prod.internal"
+PORT=5433
+DB_USER="app_prod_user"
+DB_PASSWORD="sk_test_newpass4200"
+REDIS_URL="redis://10.0.0.5:6379"
+JWT_SECRET="sk_test_supersecretjwtkey9988"
+DEBUG=false
+MAX_CONNECTIONS=150`
+    };
+
+    function testOpenModal() {
+      if (typeof window.GSMDiffEngine !== 'undefined') {
+        const dockBtn = document.querySelector('#gsm-btn-compare');
+        if (dockBtn) {
+          dockBtn.click();
+        }
+      }
+    }
+  </script>
+
+  <!-- Load Scripts -->
+  <script src="../diff-engine.js"></script>
+  <script src="../content.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "gsm-diff",
+  "version": "1.0.0",
+  "description": "Chrome Extension for Google Cloud Secret Manager (GSM) and Audit Logs Diff",
+  "main": "diff-engine.js",
+  "scripts": {
+    "test": "node test/test-diff.js && node test/test-dom-integration.js",
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "keywords": [
+    "gcp",
+    "google-cloud",
+    "secret-manager",
+    "diff",
+    "chrome-extension",
+    "audit-logs"
+  ],
+  "author": "Antigravity",
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,625 @@
+/**
+ * GSM Diff - Injected Stylesheet
+ * Google Cloud Console theme matching (Dark / Light responsive)
+ */
+
+:root {
+  --gsm-primary: #1a73e8;
+  --gsm-primary-hover: #1557b0;
+  --gsm-primary-bg: #e8f0fe;
+  --gsm-bg-surface: #ffffff;
+  --gsm-bg-panel: #f8f9fa;
+  --gsm-border: #dadce0;
+  --gsm-text-main: #202124;
+  --gsm-text-muted: #5f6368;
+  --gsm-del-bg: #fce8e6;
+  --gsm-del-text: #c5221f;
+  --gsm-del-highlight: #f6aea9;
+  --gsm-ins-bg: #e6f4ea;
+  --gsm-ins-text: #137333;
+  --gsm-ins-highlight: #a8dab5;
+  --gsm-modify-bg: #fef7e0;
+  --gsm-font-mono: 'Roboto Mono', 'SF Mono', Consolas, 'Courier New', monospace;
+  --gsm-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.12);
+  --gsm-radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gsm-primary: #8ab4f8;
+    --gsm-primary-hover: #aecbfa;
+    --gsm-primary-bg: #1e2c40;
+    --gsm-bg-surface: #202124;
+    --gsm-bg-panel: #292a2d;
+    --gsm-border: #3c4043;
+    --gsm-text-main: #e8eaed;
+    --gsm-text-muted: #9aa0a6;
+    --gsm-del-bg: #3c1f1e;
+    --gsm-del-text: #f28b82;
+    --gsm-del-highlight: #5c2b29;
+    --gsm-ins-bg: #1b382b;
+    --gsm-ins-text: #81c995;
+    --gsm-ins-highlight: #28553f;
+    --gsm-modify-bg: #332d18;
+    --gsm-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* --- Floating Action Dock --- */
+#gsm-dock {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  background: var(--gsm-bg-surface);
+  border: 1px solid var(--gsm-border);
+  border-radius: 12px;
+  box-shadow: var(--gsm-shadow);
+  padding: 12px 16px;
+  font-family: 'Google Sans', Roboto, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--gsm-text-main);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 440px;
+  min-width: 320px;
+}
+
+#gsm-dock.gsm-minimized {
+  padding: 8px 12px;
+  min-width: auto;
+}
+
+#gsm-dock.gsm-minimized .gsm-dock-body {
+  display: none;
+}
+
+.gsm-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gsm-dock-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--gsm-text-main);
+}
+
+.gsm-logo-icon {
+  width: 18px;
+  height: 18px;
+  fill: var(--gsm-primary);
+}
+
+.gsm-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--gsm-primary-bg);
+  color: var(--gsm-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gsm-dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gsm-icon-btn {
+  background: none;
+  border: none;
+  color: var(--gsm-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gsm-icon-btn:hover {
+  background: var(--gsm-bg-panel);
+  color: var(--gsm-text-main);
+}
+
+.gsm-dock-body {
+  margin-top: 10px;
+  border-top: 1px solid var(--gsm-border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gsm-secret-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gsm-secret-name {
+  font-weight: 600;
+  color: var(--gsm-text-main);
+  word-break: break-all;
+}
+
+.gsm-secret-sub {
+  font-size: 11px;
+  color: var(--gsm-text-muted);
+}
+
+.gsm-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gsm-bg-panel);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--gsm-border);
+}
+
+.gsm-select {
+  flex: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--gsm-border);
+  background: var(--gsm-bg-surface);
+  color: var(--gsm-text-main);
+  font-size: 12px;
+  outline: none;
+}
+
+.gsm-dock-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.gsm-btn {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+
+.gsm-btn-primary {
+  background: var(--gsm-primary);
+  color: #ffffff;
+  border-color: var(--gsm-primary);
+}
+
+.gsm-btn-primary:hover {
+  background: var(--gsm-primary-hover);
+}
+
+.gsm-btn-secondary {
+  background: var(--gsm-bg-panel);
+  color: var(--gsm-text-main);
+  border-color: var(--gsm-border);
+}
+
+.gsm-btn-secondary:hover {
+  background: var(--gsm-border);
+}
+
+.gsm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Injected row elements */
+.gsm-row-checkbox-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.gsm-row-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--gsm-primary);
+}
+
+.gsm-row-diff-btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--gsm-primary-bg);
+  color: var(--gsm-primary);
+  border: 1px solid var(--gsm-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gsm-row-diff-btn:hover {
+  background: var(--gsm-primary);
+  color: #fff;
+}
+
+/* --- GSM Diff Modal --- */
+#gsm-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+  animation: gsm-fade-in 0.2s ease-out;
+}
+
+@keyframes gsm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gsm-modal {
+  background: var(--gsm-bg-surface);
+  border-radius: 12px;
+  width: 95vw;
+  max-width: 1400px;
+  height: 90vh;
+  max-height: 950px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--gsm-border);
+  overflow: hidden;
+  font-family: 'Google Sans', Roboto, -apple-system, sans-serif;
+  color: var(--gsm-text-main);
+}
+
+.gsm-modal-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gsm-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gsm-bg-panel);
+  gap: 12px;
+}
+
+.gsm-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gsm-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gsm-version-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gsm-version-chip {
+  padding: 3px 8px;
+  background: var(--gsm-bg-surface);
+  border: 1px solid var(--gsm-border);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gsm-swap-btn {
+  background: none;
+  border: 1px solid var(--gsm-border);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--gsm-text-muted);
+}
+
+.gsm-swap-btn:hover {
+  background: var(--gsm-bg-surface);
+  color: var(--gsm-primary);
+  border-color: var(--gsm-primary);
+}
+
+.gsm-modal-toolbar {
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--gsm-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gsm-bg-surface);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gsm-toolbar-left, .gsm-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gsm-diff-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.gsm-stat-add {
+  color: var(--gsm-ins-text);
+  background: var(--gsm-ins-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.gsm-stat-del {
+  color: var(--gsm-del-text);
+  background: var(--gsm-del-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.gsm-toggle-group {
+  display: flex;
+  background: var(--gsm-bg-panel);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--gsm-border);
+}
+
+.gsm-toggle-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--gsm-text-muted);
+}
+
+.gsm-toggle-btn.active {
+  background: var(--gsm-bg-surface);
+  color: var(--gsm-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.gsm-search-input {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--gsm-border);
+  border-radius: 6px;
+  background: var(--gsm-bg-panel);
+  color: var(--gsm-text-main);
+  outline: none;
+  width: 140px;
+}
+
+.gsm-search-input:focus {
+  border-color: var(--gsm-primary);
+  background: var(--gsm-bg-surface);
+}
+
+/* Modal Body */
+.gsm-modal-body {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: var(--gsm-bg-surface);
+}
+
+/* Loading & Error States */
+.gsm-loading-state, .gsm-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 14px;
+  padding: 30px;
+  text-align: center;
+}
+
+.gsm-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--gsm-border);
+  border-top-color: var(--gsm-primary);
+  border-radius: 50%;
+  animation: gsm-spin 0.8s linear infinite;
+}
+
+@keyframes gsm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.gsm-error-box {
+  background: var(--gsm-del-bg);
+  color: var(--gsm-del-text);
+  border: 1px solid var(--gsm-del-highlight);
+  border-radius: 8px;
+  padding: 16px;
+  max-width: 600px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gsm-manual-inputs {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 1000px;
+  margin-top: 16px;
+}
+
+.gsm-manual-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gsm-textarea {
+  width: 100%;
+  height: 220px;
+  font-family: var(--gsm-font-mono);
+  font-size: 12px;
+  border: 1px solid var(--gsm-border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--gsm-bg-panel);
+  color: var(--gsm-text-main);
+  outline: none;
+  resize: vertical;
+}
+
+/* --- Diff Viewer Tables --- */
+.gsm-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--gsm-font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.gsm-diff-row td {
+  padding: 1px 4px;
+  vertical-align: top;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.gsm-line-num {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  text-align: right;
+  padding-right: 8px !important;
+  color: var(--gsm-text-muted);
+  user-select: none;
+  background: var(--gsm-bg-panel);
+  border-right: 1px solid var(--gsm-border);
+  opacity: 0.75;
+}
+
+.gsm-line-content {
+  padding-left: 8px !important;
+}
+
+/* Row Styling */
+.gsm-row-delete td.gsm-line-content {
+  background-color: var(--gsm-del-bg);
+  color: var(--gsm-del-text);
+}
+
+.gsm-row-insert td.gsm-line-content {
+  background-color: var(--gsm-ins-bg);
+  color: var(--gsm-ins-text);
+}
+
+.gsm-token-deleted {
+  background-color: var(--gsm-del-highlight);
+  border-radius: 2px;
+  padding: 1px 2px;
+  font-weight: 600;
+}
+
+.gsm-token-inserted {
+  background-color: var(--gsm-ins-highlight);
+  border-radius: 2px;
+  padding: 1px 2px;
+  font-weight: 600;
+}
+
+.gsm-split-container {
+  display: flex;
+  width: 100%;
+  min-height: 100%;
+}
+
+.gsm-split-pane {
+  flex: 1;
+  width: 50%;
+  overflow-x: auto;
+}
+
+.gsm-split-pane:first-child {
+  border-right: 2px solid var(--gsm-border);
+}
+
+.gsm-split-header {
+  position: sticky;
+  top: 0;
+  background: var(--gsm-bg-panel);
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gsm-text-muted);
+  border-bottom: 1px solid var(--gsm-border);
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+}
+
+.gsm-copy-btn {
+  background: none;
+  border: none;
+  color: var(--gsm-primary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.gsm-copy-btn:hover {
+  text-decoration: underline;
+}
+
+.gsm-empty-cell {
+  background: var(--gsm-bg-panel);
+  opacity: 0.4;
+}
+
+.gsm-highlight-search {
+  background-color: #fff176;
+  color: #000;
+  border-radius: 2px;
+}
