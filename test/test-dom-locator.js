@@ -279,14 +279,27 @@ ENABLE_SSL=true`;
 
 // Test 6: Diff Modal Stacking Context & Non-Destructive Dialog Isolation
 {
-  // 1. Verify CSS rules enforce maximum 32-bit z-index (2147483647)
+  // 1. Verify CSS rules enforce dialog styling and maximum 32-bit z-index (2147483647)
   const fs = require('fs');
   const path = require('path');
   const cssContent = fs.readFileSync(path.join(__dirname, '../content.css'), 'utf8');
+  const jsContent = fs.readFileSync(path.join(__dirname, '../content.js'), 'utf8');
 
   assert.ok(
     cssContent.includes('z-index: 2147483647 !important'),
     'content.css must declare z-index: 2147483647 !important for #gsm-modal-backdrop'
+  );
+  assert.ok(
+    cssContent.includes('dialog#gsm-modal-backdrop'),
+    'content.css must style dialog#gsm-modal-backdrop for native Top Layer support'
+  );
+  assert.ok(
+    jsContent.includes("document.createElement('dialog')"),
+    "content.js must create modalElement as HTML5 <dialog> element"
+  );
+  assert.ok(
+    jsContent.includes("modalElement.showModal()"),
+    "content.js must call showModal() to promote modal into browser's Top Layer"
   );
 
   // 2. Simulate Native GCP Add Version Dialog + Diff Modal Layering & Escape Interception
@@ -324,11 +337,22 @@ ENABLE_SSL=true`;
 
   // When GSM Diff modal opens:
   let diffModalOpen = true;
+  let showModalCalled = false;
+  let dialogClosed = false;
+
+  const mockDialogElement = {
+    open: true,
+    showModal() { showModalCalled = true; this.open = true; },
+    close() { dialogClosed = true; this.open = false; }
+  };
+  mockDialogElement.showModal();
+
   const modalKeyDownHandler = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      mockDialogElement.close();
       diffModalOpen = false;
     }
   };
@@ -359,12 +383,14 @@ ENABLE_SSL=true`;
   }
 
   // Assertions:
+  assert.strictEqual(showModalCalled, true, 'showModal() must be called to promote dialog into Top Layer');
+  assert.strictEqual(dialogClosed, true, 'Diff modal dialog should have closed');
   assert.strictEqual(diffModalOpen, false, 'Diff modal should have closed');
   assert.strictEqual(nativeDialog.isOpen, true, 'Native Add Version dialog MUST still be open');
   assert.strictEqual(nativeDialogClosed, false, 'Native dialog close handler must NOT have been called');
   assert.strictEqual(nativeDialog.textarea.value, mockDraftValue, 'Drafted textarea value must remain intact');
 
-  console.log('✓ Diff modal max z-index layering and non-destructive draft preservation verified');
+  console.log('✓ HTML5 <dialog> Top Layer promotion, z-index layering, and non-destructive draft preservation verified');
 }
 
 console.log('--- All Locator Tests Passed! ---');

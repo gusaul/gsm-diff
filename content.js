@@ -739,10 +739,10 @@
     const labelA = options.labelA || `Version ${verA}`;
     const labelB = options.labelB || `Version ${verB}`;
 
-    modalElement = document.createElement('div');
+    modalElement = document.createElement('dialog');
     modalElement.id = 'gsm-modal-backdrop';
     modalElement.setAttribute('tabindex', '-1');
-    modalElement.style.cssText = 'position: fixed !important; top: 0px !important; left: 0px !important; right: 0px !important; bottom: 0px !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important;';
+    modalElement.style.cssText = 'position: fixed !important; top: 0px !important; left: 0px !important; right: 0px !important; bottom: 0px !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0px !important; padding: 0px !important; border: none !important; background: rgba(0, 0, 0, 0.65) !important; z-index: 2147483647 !important; display: flex !important; align-items: center !important; justify-content: center !important; outline: none !important; box-sizing: border-box !important; overflow: hidden !important;';
 
     modalElement.innerHTML = `
       <div class="gsm-modal">
@@ -797,6 +797,21 @@
 
     document.body.appendChild(modalElement);
 
+    // Elevate to browser Top Layer using native HTML5 showModal()
+    try {
+      if (typeof modalElement.showModal === 'function') {
+        modalElement.showModal();
+      }
+    } catch (e) {
+      console.warn('[GSM Diff] showModal fallback:', e);
+      try {
+        modalElement.setAttribute('popover', 'manual');
+        if (typeof modalElement.showPopover === 'function') {
+          modalElement.showPopover();
+        }
+      } catch (_) {}
+    }
+
     // Modal Events - Isolated so closing or clicking does not bubble to underlying dialogs
     modalElement.querySelector('#gsm-modal-close')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -816,6 +831,14 @@
 
     modalElement.querySelector('.gsm-modal')?.addEventListener('click', (e) => {
       e.stopPropagation();
+    });
+
+    // Intercept native <dialog> cancel event (fired by browser on Escape)
+    modalElement.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      closeDiffModal();
     });
 
     // Intercept Escape key in CAPTURE phase so underlying GCP dialogs never receive it
@@ -1562,6 +1585,16 @@
       modalKeyDownHandler = null;
     }
     if (modalElement) {
+      try {
+        if (typeof modalElement.close === 'function' && modalElement.open) {
+          modalElement.close();
+        }
+      } catch (_) {}
+      try {
+        if (typeof modalElement.hidePopover === 'function') {
+          modalElement.hidePopover();
+        }
+      } catch (_) {}
       modalElement.remove();
       modalElement = null;
     }
