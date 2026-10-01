@@ -100,8 +100,20 @@
   function renderDockContent(context) {
     if (!dockElement) return;
 
-    const vA = Array.from(selectedVersionIds)[0] || (availableVersions[0]?.id || '');
-    const vB = Array.from(selectedVersionIds)[1] || (availableVersions[1]?.id || '');
+    let vA = '';
+    let vB = '';
+    const checked = Array.from(selectedVersionIds);
+    if (checked.length >= 2) {
+      vA = checked[0];
+      vB = checked[1];
+    } else if (checked.length === 1) {
+      vA = checked[0];
+      const other = availableVersions.find(v => v.id !== vA);
+      vB = other ? other.id : '';
+    } else {
+      vA = availableVersions[0]?.id || '';
+      vB = availableVersions[1]?.id || '';
+    }
 
     const optionsHtml = availableVersions.map(v => 
       `<option value="${v.id}">Version ${v.id} (${v.state || 'ENABLED'})</option>`
@@ -166,14 +178,16 @@
       selectedVersionIds.clear();
       if (e.target.value) selectedVersionIds.add(e.target.value);
       if (selB?.value) selectedVersionIds.add(selB.value);
-      updateRowCheckboxes();
+      updateNativeCheckboxesFromSelection();
+      renderDockContent(context);
     });
 
     selB?.addEventListener('change', (e) => {
       selectedVersionIds.clear();
       if (selA?.value) selectedVersionIds.add(selA.value);
       if (e.target.value) selectedVersionIds.add(e.target.value);
-      updateRowCheckboxes();
+      updateNativeCheckboxesFromSelection();
+      renderDockContent(context);
     });
 
     dockElement.querySelector('#gsm-btn-compare')?.addEventListener('click', () => {
@@ -198,16 +212,113 @@
   }
 
   /**
-   * Scan Console DOM for Version Rows and inject checkboxes & diff buttons
+   * Helper to check if a checkbox or Material Design checkbox element is checked
+   */
+  function isCheckboxChecked(el) {
+    if (!el) return false;
+
+    // Checkbox input directly
+    if (el.tagName === 'INPUT' && el.type === 'checkbox') {
+      return el.checked;
+    }
+
+    // Nested native checkbox input
+    const input = el.querySelector('input[type="checkbox"]');
+    if (input && input.checked) {
+      return true;
+    }
+
+    // ARIA checked attribute
+    const ariaChecked = el.getAttribute('aria-checked') || input?.getAttribute('aria-checked');
+    if (ariaChecked === 'true') {
+      return true;
+    }
+
+    // Angular Material / MDC CSS classes
+    if (
+      el.classList.contains('mat-mdc-checkbox-checked') ||
+      el.classList.contains('mat-checkbox-checked') ||
+      el.classList.contains('mdc-checkbox--selected') ||
+      el.classList.contains('checked')
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  let isUpdatingFromDock = false;
+
+  /**
+   * Synchronize selectedVersionIds from the native GSM table checkboxes
+   */
+  function syncSelectedVersionsFromTable(context) {
+    if (isUpdatingFromDock) return;
+
+    const currentChecked = new Set();
+    const rows = document.querySelectorAll('[data-gsm-version]');
+
+    rows.forEach(row => {
+      const ver = row.getAttribute('data-gsm-version');
+      const cb = row.querySelector('mat-checkbox, mat-mdc-checkbox, input[type="checkbox"]:not(.gsm-row-checkbox), [role="checkbox"]');
+      if (cb && isCheckboxChecked(cb)) {
+        currentChecked.add(ver);
+      }
+    });
+
+    let changed = currentChecked.size !== selectedVersionIds.size;
+    if (!changed) {
+      for (const v of currentChecked) {
+        if (!selectedVersionIds.has(v)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    if (changed) {
+      selectedVersionIds = currentChecked;
+      console.log('[GSM Diff] Synced selection from native GSM checkboxes:', Array.from(selectedVersionIds));
+      renderDockContent(context);
+    }
+  }
+
+  /**
+   * Update the native table checkboxes when versions are changed via dock dropdowns
+   */
+  function updateNativeCheckboxesFromSelection() {
+    isUpdatingFromDock = true;
+    const rows = document.querySelectorAll('[data-gsm-version]');
+    rows.forEach(row => {
+      const ver = row.getAttribute('data-gsm-version');
+      const cb = row.querySelector('mat-checkbox, mat-mdc-checkbox, input[type="checkbox"]:not(.gsm-row-checkbox), [role="checkbox"]');
+      if (cb) {
+        const shouldBeChecked = selectedVersionIds.has(ver);
+        const isChecked = isCheckboxChecked(cb);
+        if (shouldBeChecked !== isChecked) {
+          cb.click();
+        }
+      }
+    });
+    setTimeout(() => { isUpdatingFromDock = false; }, 200);
+  }
+
+  /**
+   * Scan Console DOM for Version Rows, attach listeners to native checkboxes, and inject diff buttons
    */
   function scanAndEnhanceVersionTable(context) {
     if (!context.isSecretManager) return;
 
     // Secret versions table row selectors in Google Cloud Console
-    const rows = document.querySelectorAll('mat-row, tr, div[role="row"]');
+    const rows = document.querySelectorAll('tbody tr, mat-row, tr[mat-row], div[role="row"]');
     const detected = new Map();
 
     rows.forEach(row => {
+      // Exclude header rows and paginator rows
+      if (row.closest('thead, mat-header-row, mat-paginator, cfc-table-paginator, [role="columnheader"]')) {
+        return;
+      }
+
       // Find cells or links containing version number
       // e.g. text "Version 2" or link ".../versions/2"
       let versionNumber = null;
@@ -219,10 +330,10 @@
       }
 
       if (!versionNumber) {
-        // Search text content for Version X or standalone number cell
-        const cells = row.querySelectorAll('mat-cell, td, div[role="gridcell"]');
-        for (const cell of cells) {
-          const txt = cell.textContent.trim();
+        // Search first 2 cells for Version X or standalone number cell
+        const cells = row.querySelectorAll('mat-cell, td, div[role="gridcell"], div[role="cell"]');
+        for (let i = 0; i < Math.min(2, cells.length); i++) {
+          const txt = cells[i].textContent.trim();
           const match = txt.match(/^Version\s*(\d+)$/i) || txt.match(/^(\d+)$/);
           if (match && Number(match[1]) > 0 && Number(match[1]) < 100000) {
             versionNumber = match[1];
@@ -234,35 +345,46 @@
       if (versionNumber) {
         detected.set(versionNumber, { id: versionNumber, row });
 
-        // Inject checkbox if not already injected
-        if (!row.querySelector('.gsm-row-checkbox-wrapper')) {
-          const firstCell = row.querySelector('mat-cell, td, div[role="gridcell"]') || row.firstElementChild;
-          if (firstCell) {
-            const wrapper = document.createElement('span');
-            wrapper.className = 'gsm-row-checkbox-wrapper';
-            wrapper.innerHTML = `
-              <input type="checkbox" class="gsm-row-checkbox" data-version="${versionNumber}" title="Select for GSM Diff">
-            `;
+        // Clean up any legacy custom injected checkbox wrapper
+        row.querySelector('.gsm-row-checkbox-wrapper')?.remove();
 
-            const cb = wrapper.querySelector('input');
-            cb.addEventListener('change', (e) => {
-              e.stopPropagation();
-              if (cb.checked) {
-                if (selectedVersionIds.size >= 2) {
-                  // Keep the latest checked one and replace the first
-                  const arr = Array.from(selectedVersionIds);
-                  selectedVersionIds.delete(arr[0]);
-                }
-                selectedVersionIds.add(versionNumber);
-              } else {
-                selectedVersionIds.delete(versionNumber);
-              }
-              updateRowCheckboxes();
-              renderDockContent(context);
-            });
+        // Tag row with data-gsm-version for instant and reliable lookup
+        row.setAttribute('data-gsm-version', versionNumber);
 
-            firstCell.prepend(wrapper);
+        // Find the native checkbox from Google Cloud Secret Manager UI
+        const nativeCb = row.querySelector(
+          'mat-checkbox, mat-mdc-checkbox, cfc-checkbox, input[type="checkbox"]:not(.gsm-row-checkbox), [role="checkbox"]'
+        );
+
+        if (nativeCb && !nativeCb.__gsm_listener_attached__) {
+          nativeCb.__gsm_listener_attached__ = true;
+
+          const onCheckboxToggle = () => {
+            setTimeout(() => {
+              syncSelectedVersionsFromTable(context);
+            }, 50);
+            setTimeout(() => {
+              syncSelectedVersionsFromTable(context);
+            }, 150);
+          };
+
+          nativeCb.addEventListener('click', onCheckboxToggle, true);
+          nativeCb.addEventListener('change', onCheckboxToggle, true);
+
+          const nativeInput = nativeCb.querySelector('input[type="checkbox"]');
+          if (nativeInput && nativeInput !== nativeCb) {
+            nativeInput.addEventListener('change', onCheckboxToggle, true);
+            nativeInput.addEventListener('click', onCheckboxToggle, true);
           }
+
+          // Observe class and aria-checked attribute changes on the native checkbox
+          try {
+            const cbObs = new MutationObserver(onCheckboxToggle);
+            cbObs.observe(nativeCb, { attributes: true, attributeFilter: ['class', 'aria-checked'] });
+            if (nativeInput) {
+              cbObs.observe(nativeInput, { attributes: true, attributeFilter: ['checked', 'aria-checked'] });
+            }
+          } catch (e) {}
         }
 
         // Inject row "Diff with prev" button if not already present
@@ -284,6 +406,22 @@
       }
     });
 
+    // Also attach listeners to any header select-all checkboxes
+    const headerCbs = document.querySelectorAll(
+      'thead mat-checkbox, thead mat-mdc-checkbox, thead cfc-checkbox, thead input[type="checkbox"], mat-header-row mat-checkbox, mat-header-row mat-mdc-checkbox, mat-header-row cfc-checkbox, mat-header-row input[type="checkbox"]'
+    );
+    headerCbs.forEach(headerCb => {
+      if (!headerCb.__gsm_listener_attached__) {
+        headerCb.__gsm_listener_attached__ = true;
+        const onHeaderToggle = () => {
+          setTimeout(() => syncSelectedVersionsFromTable(context), 50);
+          setTimeout(() => syncSelectedVersionsFromTable(context), 150);
+        };
+        headerCb.addEventListener('click', onHeaderToggle, true);
+        headerCb.addEventListener('change', onHeaderToggle, true);
+      }
+    });
+
     if (detected.size > 0) {
       // Update availableVersions list
       const sorted = Array.from(detected.values())
@@ -295,13 +433,6 @@
         renderDockContent(context);
       }
     }
-  }
-
-  function updateRowCheckboxes() {
-    document.querySelectorAll('.gsm-row-checkbox').forEach(cb => {
-      const ver = cb.getAttribute('data-version');
-      cb.checked = selectedVersionIds.has(ver);
-    });
   }
 
   /**
@@ -763,12 +894,9 @@
   function findVersionRow(targetVersion) {
     const vStr = String(targetVersion).trim();
 
-    // Strategy 1: Check by injected checkbox attribute (most reliable if already enhanced)
-    const cb = document.querySelector(`.gsm-row-checkbox[data-version="${vStr}"]`);
-    if (cb) {
-      const row = cb.closest('mat-row, tr, div[role="row"]');
-      if (row) return row;
-    }
+    // Strategy 1: Check by tagged data-gsm-version attribute (set during row scanning)
+    const taggedRow = document.querySelector(`[data-gsm-version="${vStr}"]`);
+    if (taggedRow) return taggedRow;
 
     // Strategy 2: Scan all rows in the versions table (excluding header and paginator rows)
     const candidateRows = Array.from(document.querySelectorAll(

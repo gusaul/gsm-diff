@@ -193,6 +193,7 @@
       <table class="versions-table">
         <thead>
           <tr>
+            <th style="width: 40px;"><input type="checkbox" id="mock-select-all" title="Select all"></th>
             <th>Version</th>
             <th>State</th>
             <th>Created</th>
@@ -203,6 +204,7 @@
         <tbody>
           <!-- Version 3 -->
           <tr role="row">
+            <td><input type="checkbox" class="mat-checkbox-input" aria-label="Select Version 3"></td>
             <td>
               <a href="/security/secret-manager/secret/production-database-config/versions/3" class="version-link">
                 Version 3
@@ -218,6 +220,7 @@
 
           <!-- Version 2 -->
           <tr role="row">
+            <td><input type="checkbox" class="mat-checkbox-input" aria-label="Select Version 2"></td>
             <td>
               <a href="/security/secret-manager/secret/production-database-config/versions/2" class="version-link">
                 Version 2
@@ -233,6 +236,7 @@
 
           <!-- Version 1 -->
           <tr role="row">
+            <td><input type="checkbox" class="mat-checkbox-input" aria-label="Select Version 1"></td>
             <td>
               <a href="/security/secret-manager/secret/production-database-config/versions/1" class="version-link">
                 Version 1
@@ -343,6 +347,15 @@ MAX_CONNECTIONS=150`
 
     document.addEventListener('click', () => {
       document.querySelector('.cdk-overlay-container')?.remove();
+    });
+
+    // Mock Select All Checkbox Handler
+    document.querySelector('#mock-select-all')?.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      document.querySelectorAll('tbody input[type="checkbox"]').forEach(cb => {
+        cb.checked = isChecked;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      });
     });
 
     function testOpenModal() {
