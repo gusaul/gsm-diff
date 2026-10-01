@@ -281,6 +281,70 @@ DEBUG=false
 MAX_CONNECTIONS=150`
     };
 
+    // Mock GCP Console Menu and Dialog Behavior
+    document.querySelectorAll('.action-icon').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Remove existing overlay
+        document.querySelector('.cdk-overlay-container')?.remove();
+
+        const row = btn.closest('tr');
+        const verLink = row.querySelector('.version-link').textContent.trim();
+        const verMatch = verLink.match(/(\d+)/);
+        const verId = verMatch ? verMatch[1] : '1';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'cdk-overlay-container';
+        overlay.innerHTML = `
+          <div class="mat-mdc-menu-panel" role="menu" style="position: absolute; top: ${e.clientY + 5}px; left: ${e.clientX - 160}px; background: #fff; border: 1px solid #dadce0; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 99999; min-width: 180px; padding: 4px 0;">
+            <button role="menuitem" class="mat-mdc-menu-item" style="width: 100%; text-align: left; padding: 8px 16px; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <span style="font-size: 14px;">👁</span>
+              <span>View secret value</span>
+            </button>
+            <button role="menuitem" class="mat-mdc-menu-item" style="width: 100%; text-align: left; padding: 8px 16px; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+              <span>📋</span>
+              <span>Copy secret value</span>
+            </button>
+            <button role="menuitem" class="mat-mdc-menu-item" style="width: 100%; text-align: left; padding: 8px 16px; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #d93025;">
+              <span>🗑</span>
+              <span>Destroy version</span>
+            </button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+
+        // Click View secret value
+        overlay.querySelector('button')?.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          overlay.remove();
+
+          const val = window.__GSM_MOCK_VALUES__[verId] || '';
+          const dialog = document.createElement('mat-dialog-container');
+          dialog.className = 'mat-mdc-dialog-container';
+          dialog.setAttribute('role', 'dialog');
+          dialog.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 1px solid #dadce0; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.3); z-index: 100000; width: 500px; padding: 20px;';
+          dialog.innerHTML = `
+            <h2 style="font-size: 16px; margin-bottom: 12px;">Secret value - Version ${verId}</h2>
+            <div class="mat-mdc-dialog-content" style="margin-bottom: 16px;">
+              <textarea style="width: 100%; height: 140px; font-family: monospace; font-size: 12px; padding: 8px; border: 1px solid #dadce0; border-radius: 4px;" readonly>${val}</textarea>
+            </div>
+            <div style="text-align: right;">
+              <button class="gsm-btn gsm-btn-primary" id="mock-dialog-done">Done</button>
+            </div>
+          `;
+          document.body.appendChild(dialog);
+
+          dialog.querySelector('#mock-dialog-done')?.addEventListener('click', () => {
+            dialog.remove();
+          });
+        });
+      });
+    });
+
+    document.addEventListener('click', () => {
+      document.querySelector('.cdk-overlay-container')?.remove();
+    });
+
     function testOpenModal() {
       if (typeof window.GSMDiffEngine !== 'undefined') {
         const dockBtn = document.querySelector('#gsm-btn-compare');

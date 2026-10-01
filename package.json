@@ -4,7 +4,7 @@
   "description": "Chrome Extension for Google Cloud Secret Manager (GSM) and Audit Logs Diff",
   "main": "diff-engine.js",
   "scripts": {
-    "test": "node test/test-diff.js && node test/test-dom-integration.js",
+    "test": "node test/test-diff.js && node test/test-dom-integration.js && node test/test-dom-locator.js",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "keywords": [

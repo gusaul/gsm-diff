@@ -464,14 +464,57 @@
     let valA = '';
     let valB = '';
 
+    const statusP = modalElement?.querySelector('#gsm-modal-content p');
+    const statusSub = modalElement?.querySelector('#gsm-modal-content span');
+
     try {
-      [valA, valB] = await Promise.all([
-        fetchSecretValue(project, secret, verA),
-        fetchSecretValue(project, secret, verB)
-      ]);
+      // 1. Check if both versions are already cached (from previous fetch or network interceptor)
+      const cachedA = secretValueCache.get(`${project}/${secret}/${verA}`);
+      const cachedB = secretValueCache.get(`${project}/${secret}/${verB}`);
+
+      if (cachedA && cachedB) {
+        valA = cachedA;
+        valB = cachedB;
+      } else {
+        // 2. Try fetching via API first (works if user set gcloud token or active OAuth token)
+        try {
+          [valA, valB] = await Promise.all([
+            fetchSecretValue(project, secret, verA),
+            fetchSecretValue(project, secret, verB)
+          ]);
+        } catch (apiErr) {
+          // If API fails because no auth token is active, automatically run UI Auto-Fetch!
+          if (apiErr.message.includes('NO_AUTH_TOKEN') || apiErr.code === 'NO_AUTH_TOKEN') {
+            console.log('[GSM Diff] No API token available. Running UI Auto-Fetch directly via Console...');
+            if (statusP) statusP.textContent = `Extracting Version ${verA} and Version ${verB} via Console UI...`;
+            if (statusSub) statusSub.textContent = 'Automating native "View secret value" interaction (no token required)';
+
+            let aVal = secretValueCache.get(`${project}/${secret}/${verA}`);
+            let bVal = secretValueCache.get(`${project}/${secret}/${verB}`);
+
+            if (!aVal) {
+              if (statusP) statusP.textContent = `Extracting Version ${verA} via Console UI...`;
+              aVal = await autoFetchViaDom(verA);
+              secretValueCache.set(`${project}/${secret}/${verA}`, aVal);
+            }
+
+            if (!bVal) {
+              if (statusP) statusP.textContent = `Extracting Version ${verB} via Console UI...`;
+              bVal = await autoFetchViaDom(verB);
+              secretValueCache.set(`${project}/${secret}/${verB}`, bVal);
+            }
+
+            valA = aVal;
+            valB = bVal;
+          } else {
+            throw apiErr;
+          }
+        }
+      }
 
       renderActiveDiff(valA, valB, verA, verB);
     } catch (err) {
+      console.warn('[GSM Diff] Failed to fetch secret values:', err);
       renderErrorState(err.message, project, secret, verA, verB);
     }
   }
@@ -715,73 +758,280 @@
   }
 
   /**
-   * Automate DOM clicks to fetch secret value via Console's 'View secret value' dialog
+   * Locate the table row specifically corresponding to targetVersion
    */
-  async function autoFetchViaDom(targetVersion) {
-    const rows = Array.from(document.querySelectorAll('mat-row, tr, div[role="row"]'));
-    let targetRow = null;
-    for (const r of rows) {
-      const text = r.textContent;
-      if (text.includes(`Version ${targetVersion}`) || text.match(new RegExp(`\\b${targetVersion}\\b`))) {
-        targetRow = r;
-        break;
+  function findVersionRow(targetVersion) {
+    const vStr = String(targetVersion).trim();
+
+    // Strategy 1: Check by injected checkbox attribute (most reliable if already enhanced)
+    const cb = document.querySelector(`.gsm-row-checkbox[data-version="${vStr}"]`);
+    if (cb) {
+      const row = cb.closest('mat-row, tr, div[role="row"]');
+      if (row) return row;
+    }
+
+    // Strategy 2: Scan all rows in the versions table (excluding header and paginator rows)
+    const candidateRows = Array.from(document.querySelectorAll(
+      'tbody tr, mat-row:not(mat-header-row), tr[mat-row]:not([mat-header-row]), div[role="row"]:not([role="columnheader"])'
+    ));
+
+    for (const row of candidateRows) {
+      // Exclude header rows or paginator rows
+      if (row.closest('thead, mat-header-row, mat-paginator, cfc-table-paginator, [role="columnheader"]')) {
+        continue;
+      }
+
+      // Check for anchor link pointing to /versions/<vStr>
+      const links = Array.from(row.querySelectorAll('a[href*="/versions/"]'));
+      for (const link of links) {
+        const match = link.href.match(/\/versions\/(\d+)(\b|[/?#]|$)/);
+        if (match && match[1] === vStr) {
+          return row;
+        }
+      }
+
+      // Check first two cells for "Version X" or "X"
+      const cells = Array.from(row.querySelectorAll('mat-cell, td, div[role="gridcell"], div[role="cell"]'));
+      for (let i = 0; i < Math.min(2, cells.length); i++) {
+        const txt = cells[i].textContent.trim();
+        if (
+          txt.toLowerCase() === `version ${vStr}`.toLowerCase() ||
+          txt === vStr ||
+          txt.match(new RegExp(`^Version\\s*${vStr}\\b`, 'i'))
+        ) {
+          return row;
+        }
       }
     }
 
+    return null;
+  }
+
+  /**
+   * Find the three-dots (more_vert) Actions button on a version row
+   */
+  function findRowActionsButton(row) {
+    if (!row) return null;
+
+    // Filter out our injected buttons
+    const buttons = Array.from(row.querySelectorAll('button:not(.gsm-row-diff-btn):not(.gsm-row-checkbox)'));
+
+    // 1. By aria-label
+    const ariaMatch = buttons.find(b => {
+      const l = (b.getAttribute('aria-label') || '').toLowerCase();
+      return l.includes('action') || l.includes('more') || l.includes('tindakan') || l.includes('menu');
+    });
+    if (ariaMatch) return ariaMatch;
+
+    // 2. By more_vert icon inside
+    const iconMatch = buttons.find(b => {
+      const icon = b.querySelector('mat-icon, cfc-icon, svg, [class*="icon"]');
+      if (!icon) return false;
+      const txt = (icon.textContent || '').trim();
+      const attr = icon.getAttribute('data-mat-icon-name') || '';
+      return txt === 'more_vert' || attr === 'more_vert';
+    });
+    if (iconMatch) return iconMatch;
+
+    // 3. Button in the last column / cell
+    const cells = Array.from(row.querySelectorAll('mat-cell, td, div[role="gridcell"]'));
+    if (cells.length > 0) {
+      const lastCell = cells[cells.length - 1];
+      const lastBtn = lastCell.querySelector('button:not(.gsm-row-diff-btn):not(.gsm-row-checkbox)');
+      if (lastBtn) return lastBtn;
+    }
+
+    return buttons[0] || null;
+  }
+
+  /**
+   * Automate DOM clicks to fetch secret value via Console's 'View secret value' dialog
+   */
+  async function autoFetchViaDom(targetVersion) {
+    const vStr = String(targetVersion).trim();
+    const cacheKey = `${currentProject}/${currentSecret}/${vStr}`;
+
+    // Return cached value if available
+    if (secretValueCache.has(cacheKey)) {
+      return secretValueCache.get(cacheKey);
+    }
+
+    // 1. Find the version's table row
+    const targetRow = findVersionRow(vStr);
     if (!targetRow) {
-      throw new Error(`Could not locate table row for Version ${targetVersion}.`);
+      throw new Error(`Could not locate table row for Version ${vStr} in Secret Manager table.`);
     }
 
-    // Find action button on row
-    const actionBtn = targetRow.querySelector('button[aria-label*="Action"], button[aria-label*="More"], mat-icon, cfc-icon')?.closest('button') || targetRow.querySelector('button');
+    // 2. Find the Actions (3 dots) button on that row
+    const actionBtn = findRowActionsButton(targetRow);
     if (!actionBtn) {
-      throw new Error(`Could not find Actions button on row for Version ${targetVersion}.`);
+      throw new Error(`Could not find Actions (⋮) button on row for Version ${vStr}.`);
     }
 
+    // Scroll into view & click
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await new Promise(r => setTimeout(r, 200));
     actionBtn.click();
-    await new Promise(r => setTimeout(r, 450));
+    console.log(`[GSM Diff] Clicked Actions menu button for Version ${vStr}`);
 
-    // Look for menu item with "View secret value"
-    const menuItems = Array.from(document.querySelectorAll('button[role="menuitem"], .mat-menu-item, .cfc-menu-item, div[role="menuitem"]'));
-    const viewItem = menuItems.find(el => el.textContent.toLowerCase().includes('view secret value'));
+    // 3. Wait for menu to appear in DOM (poll up to 2.5s)
+    let menuItems = [];
+    const menuStart = Date.now();
+    while (Date.now() - menuStart < 2500) {
+      const menus = Array.from(document.querySelectorAll(
+        '.cdk-overlay-container [role="menu"], [role="menu"], .mat-mdc-menu-panel, .mat-menu-panel, cfc-menu'
+      ));
+
+      if (menus.length > 0) {
+        const activeMenu = menus[menus.length - 1];
+        menuItems = Array.from(activeMenu.querySelectorAll(
+          '[role="menuitem"], button.mat-mdc-menu-item, button.mat-menu-item, button.cfc-menu-item, button'
+        )).filter(el => el.offsetParent !== null || el.clientHeight > 0 || getComputedStyle(el).display !== 'none');
+
+        if (menuItems.length > 0) break;
+      }
+      await new Promise(r => setTimeout(r, 80));
+    }
+
+    if (menuItems.length === 0) {
+      // Check document-wide menu items
+      menuItems = Array.from(document.querySelectorAll('[role="menuitem"], .mat-mdc-menu-item, .mat-menu-item'));
+    }
+
+    if (menuItems.length === 0) {
+      throw new Error(`Actions menu for Version ${vStr} did not open.`);
+    }
+
+    const itemTexts = menuItems.map(m => m.textContent.trim().replace(/\s+/g, ' '));
+    console.log(`[GSM Diff] Found menu items for Version ${vStr}:`, itemTexts);
+
+    const negativeKeywords = ['disable', 'destroy', 'delete', 'nonaktif', 'hancur', 'hapus', 'desactivar', 'destruir', 'löschen', 'deaktivieren'];
+
+    // Multi-language matching for "View secret value"
+    const viewKeywords = [
+      'view secret', 'view value', 'view payload', 'view',
+      'lihat nilai', 'lihat rahasia', 'lihat',
+      'ver valor', 'ver secreto',
+      'afficher', 'anzeigen', 'visualizza', '表示', '查看'
+    ];
+
+    let viewItem = menuItems.find(item => {
+      const txt = item.textContent.toLowerCase();
+      // Must NOT be a destructive or disabling action
+      if (negativeKeywords.some(neg => txt.includes(neg))) return false;
+      return viewKeywords.some(kw => txt.includes(kw)) || txt.match(/\bver\b/);
+    });
+
+    // Check for visibility / eye icon
+    if (!viewItem) {
+      viewItem = menuItems.find(item => {
+        const txt = item.textContent.toLowerCase();
+        if (negativeKeywords.some(neg => txt.includes(neg))) return false;
+        const icon = item.querySelector('mat-icon, cfc-icon, svg');
+        if (!icon) return false;
+        const name = (icon.textContent || '').trim();
+        const attr = icon.getAttribute('data-mat-icon-name') || '';
+        return name === 'visibility' || attr === 'visibility';
+      });
+    }
+
+    // Negative filtering fallback (any item that is not disable/destroy/delete)
+    if (!viewItem) {
+      viewItem = menuItems.find(item => {
+        const txt = item.textContent.toLowerCase();
+        return !negativeKeywords.some(kw => txt.includes(kw));
+      });
+    }
+
+    // Fallback to first item
+    if (!viewItem && menuItems.length > 0) {
+      viewItem = menuItems[0];
+    }
+
     if (!viewItem) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      throw new Error('Menu opened, but "View secret value" option was not found.');
+      throw new Error(`"View secret value" option not found among menu options: [${itemTexts.join(', ')}]`);
     }
 
+    console.log(`[GSM Diff] Clicking menu item: "${viewItem.textContent.trim()}"`);
     viewItem.click();
-    await new Promise(r => setTimeout(r, 800));
 
-    // Wait for dialog
-    const dialog = document.querySelector('mat-dialog-container, div[role="dialog"]');
-    if (!dialog) {
-      throw new Error('Secret value dialog did not open.');
+    // 4. Wait for Secret Value dialog to appear (poll up to 3.5s)
+    let dialog = null;
+    const dialogStart = Date.now();
+    while (Date.now() - dialogStart < 3500) {
+      // Check if network interceptor already captured payload during click
+      if (secretValueCache.has(cacheKey)) {
+        console.log(`[GSM Diff] Intercepted payload for Version ${vStr} via network!`);
+        break;
+      }
+
+      dialog = document.querySelector(
+        '.cdk-overlay-container mat-dialog-container, mat-dialog-container, div[role="dialog"], .mat-mdc-dialog-container, cfc-dialog'
+      );
+      if (dialog && (dialog.offsetParent !== null || dialog.clientHeight > 0)) {
+        break;
+      }
+      await new Promise(r => setTimeout(r, 100));
     }
 
-    // Extract value from dialog
+    // If network interceptor caught it, close any open dialog and return
+    if (secretValueCache.has(cacheKey)) {
+      if (dialog) {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
+      return secretValueCache.get(cacheKey);
+    }
+
+    if (!dialog) {
+      throw new Error(`Secret value dialog for Version ${vStr} did not open.`);
+    }
+
+    // Wait a brief moment for content to populate inside dialog
+    await new Promise(r => setTimeout(r, 500));
+
+    // Check if dialog has a reveal / show eye button
+    const revealBtn = Array.from(dialog.querySelectorAll('button')).find(b => {
+      const l = (b.getAttribute('aria-label') || '').toLowerCase();
+      const icon = b.querySelector('mat-icon, cfc-icon');
+      const iconTxt = (icon?.textContent || '').trim();
+      return l.includes('show') || l.includes('reveal') || l.includes('tampilkan') || iconTxt === 'visibility';
+    });
+    if (revealBtn) {
+      revealBtn.click();
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    // Extract secret value
     let secretText = '';
     const textarea = dialog.querySelector('textarea, pre, code');
     if (textarea) {
       secretText = textarea.value || textarea.textContent;
     } else {
-      const contentEl = dialog.querySelector('.mat-dialog-content, div[class*="content"]') || dialog;
-      secretText = contentEl.textContent.trim();
+      const contentEl = dialog.querySelector('.mat-dialog-content, .mat-mdc-dialog-content, div[class*="content"]') || dialog;
+      const subPre = contentEl.querySelector('pre, code, textarea');
+      secretText = subPre ? (subPre.value || subPre.textContent) : contentEl.textContent;
     }
 
     // Close dialog
     const closeBtn = Array.from(dialog.querySelectorAll('button')).find(b => {
-      const t = b.textContent.toLowerCase();
-      return t.includes('done') || t.includes('close') || t.includes('ok');
+      const t = b.textContent.toLowerCase().trim();
+      return t.includes('done') || t.includes('close') || t.includes('selesai') || t.includes('tutup') || t.includes('ok');
     });
 
     if (closeBtn) {
       closeBtn.click();
     } else {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     }
 
-    await new Promise(r => setTimeout(r, 400));
-    return secretText;
+    await new Promise(r => setTimeout(r, 350));
+
+    const finalVal = (secretText || '').trim();
+    secretValueCache.set(cacheKey, finalVal);
+    console.log(`[GSM Diff] Successfully extracted Version ${vStr} payload (${finalVal.length} chars)`);
+    return finalVal;
   }
 
   /**
@@ -794,52 +1044,52 @@
     container.innerHTML = `
       <div class="gsm-error-state" style="max-width: 900px; margin: 0 auto; text-align: left;">
         <div class="gsm-error-box" style="width: 100%; margin-bottom: 16px;">
-          <strong>Unable to automatically fetch secret values via API:</strong><br>
+          <strong>Unable to load secret values automatically:</strong><br>
           <span style="font-size: 12px; opacity: 0.95;">${escapeHtml(errorMessage)}</span>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; margin-bottom: 16px;">
-          <!-- Option 1: DOM Auto-Fetch -->
+          <!-- Option 1: Retry DOM Auto-Fetch -->
           <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between;">
             <div>
               <strong style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                ⚡ Try UI Auto-Fetch (No Token Needed)
+                ⚡ Retry UI Auto-Fetch
               </strong>
               <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 6px 0 12px 0;">
-                Automatically opens the console's "View secret value" dialog for Version ${verA} and Version ${verB} to extract values.
+                Automates opening the "View secret value" dialog for Version ${verA} and Version ${verB}.
               </p>
             </div>
             <button class="gsm-btn gsm-btn-primary" id="gsm-btn-try-dom-autofetch" style="width: 100%;">
-              ⚡ Run UI Auto-Fetch
+              ⚡ Run UI Auto-Fetch Now
             </button>
           </div>
 
-          <!-- Option 2: Reload Page -->
+          <!-- Option 2: Live Click-and-Capture Guide -->
           <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between;">
             <div>
               <strong style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
-                🔄 Reload Page to Capture Token
+                👆 Live Click & Capture
               </strong>
               <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 6px 0 12px 0;">
-                Google Cloud Console sends authentication tokens during page load. Reloading the tab allows the extension to capture it.
+                Click "View secret value" on Version ${verA} and Version ${verB} in the table with your mouse. GSM Diff will auto-capture them!
               </p>
             </div>
-            <button class="gsm-btn gsm-btn-secondary" id="gsm-btn-reload-page" style="width: 100%;">
-              🔄 Reload Tab
+            <button class="gsm-btn gsm-btn-secondary" id="gsm-btn-close-for-manual" style="width: 100%;">
+              Return to Console Table
             </button>
           </div>
         </div>
 
         <!-- Option 3: gcloud token input -->
         <div style="background: var(--gsm-bg-panel); border: 1px solid var(--gsm-border); border-radius: 8px; padding: 14px; width: 100%; margin-bottom: 16px;">
-          <strong style="font-size: 13px;">🔑 Or Paste gcloud Access Token</strong>
+          <strong style="font-size: 13px;">🔑 Or Paste gcloud Access Token (Instant 1-Click Access)</strong>
           <p style="font-size: 11.5px; color: var(--gsm-text-muted); margin: 4px 0 8px 0;">
-            Run <code style="background: var(--gsm-bg-surface); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--gsm-border); font-family: var(--gsm-font-mono);">gcloud auth print-access-token</code> in terminal and paste below:
+            Run in your terminal: <code style="background: var(--gsm-bg-surface); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--gsm-border); font-family: var(--gsm-font-mono);">gcloud auth print-access-token</code>
           </p>
           <div style="display: flex; gap: 8px;">
-            <input type="password" id="gsm-modal-input-token" placeholder="Paste ya29... access token" style="flex: 1; padding: 6px 10px; font-family: var(--gsm-font-mono); font-size: 12px; border: 1px solid var(--gsm-border); border-radius: 6px; background: var(--gsm-bg-surface); color: var(--gsm-text-main); outline: none;">
+            <input type="password" id="gsm-modal-input-token" placeholder="Paste ya29... token here" style="flex: 1; padding: 6px 10px; font-family: var(--gsm-font-mono); font-size: 12px; border: 1px solid var(--gsm-border); border-radius: 6px; background: var(--gsm-bg-surface); color: var(--gsm-text-main); outline: none;">
             <button class="gsm-btn gsm-btn-primary" id="gsm-btn-save-modal-token">
-              Save & Compare
+              Save & Diff
             </button>
           </div>
         </div>
@@ -865,36 +1115,36 @@
       </div>
     `;
 
-    // Handler 1: UI Auto-Fetch
+    // Handler 1: UI Auto-Fetch Retry
     container.querySelector('#gsm-btn-try-dom-autofetch')?.addEventListener('click', async () => {
       const btn = container.querySelector('#gsm-btn-try-dom-autofetch');
       btn.disabled = true;
-      btn.textContent = 'Fetching Version ' + verA + ' via UI...';
+      btn.textContent = `Fetching Version ${verA}...`;
       try {
         const vA = await autoFetchViaDom(verA);
-        btn.textContent = 'Fetching Version ' + verB + ' via UI...';
+        btn.textContent = `Fetching Version ${verB}...`;
         const vB = await autoFetchViaDom(verB);
 
         secretValueCache.set(`${project}/${secret}/${verA}`, vA);
         secretValueCache.set(`${project}/${secret}/${verB}`, vB);
         renderActiveDiff(vA, vB, verA, verB);
       } catch (domErr) {
-        alert('UI Auto-Fetch failed: ' + domErr.message + '\nPlease use the gcloud token or manual paste option.');
+        alert('UI Auto-Fetch error: ' + domErr.message + '\n\nPlease use the gcloud token option or manual paste.');
         btn.disabled = false;
-        btn.textContent = '⚡ Run UI Auto-Fetch';
+        btn.textContent = '⚡ Run UI Auto-Fetch Now';
       }
     });
 
-    // Handler 2: Reload Page
-    container.querySelector('#gsm-btn-reload-page')?.addEventListener('click', () => {
-      window.location.reload();
+    // Handler 2: Return to console for live click & capture
+    container.querySelector('#gsm-btn-close-for-manual')?.addEventListener('click', () => {
+      closeDiffModal();
     });
 
     // Handler 3: gcloud token save
     container.querySelector('#gsm-btn-save-modal-token')?.addEventListener('click', () => {
       const tok = container.querySelector('#gsm-modal-input-token')?.value?.trim();
       if (!tok) {
-        alert('Please enter a valid token (starts with ya29...)');
+        alert('Please paste a valid access token (starts with ya29...)');
         return;
       }
       chrome.runtime.sendMessage({ type: 'SET_MANUAL_TOKEN', token: tok }, async (res) => {
@@ -1022,6 +1272,32 @@
       }
     }
   });
+
+  // Live Dialog Observer: automatically capture secret payload whenever a dialog is open on the page
+  const liveDialogObserver = new MutationObserver(() => {
+    const dialog = document.querySelector('mat-dialog-container, div[role="dialog"], .mat-mdc-dialog-container, cfc-dialog');
+    if (dialog && !dialog.__gsm_monitored__) {
+      dialog.__gsm_monitored__ = true;
+      setTimeout(() => {
+        try {
+          const textEl = dialog.querySelector('textarea, pre, code, .mat-dialog-content');
+          if (textEl && currentProject && currentSecret) {
+            const txt = (textEl.value || textEl.textContent || '').trim();
+            if (txt) {
+              const title = (dialog.querySelector('h1, h2, [class*="title"]')?.textContent || '').toLowerCase();
+              const match = title.match(/version\s*(\d+)/i) || document.location.href.match(/versions\/(\d+)/);
+              if (match) {
+                const ver = match[1];
+                secretValueCache.set(`${currentProject}/${currentSecret}/${ver}`, txt);
+                console.log(`[GSM Diff] Live dialog captured Version ${ver} payload!`);
+              }
+            }
+          }
+        } catch (e) {}
+      }, 500);
+    }
+  });
+  liveDialogObserver.observe(document.body, { childList: true, subtree: true });
 
   // Initial check
   checkAndSyncPage();
