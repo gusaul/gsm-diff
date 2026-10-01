@@ -1373,9 +1373,8 @@
     let dialog = null;
     const dialogStart = Date.now();
     while (Date.now() - dialogStart < 3500) {
-      // Check if network interceptor already captured payload during click
+      // Check if payload is already in cache (e.g. captured by live dialog observer)
       if (secretValueCache.has(cacheKey)) {
-        console.log(`[GSM Diff] Intercepted payload for Version ${vStr} via network!`);
         break;
       }
 
@@ -1388,7 +1387,7 @@
       await new Promise(r => setTimeout(r, 100));
     }
 
-    // If network interceptor caught it, close any open dialog and return
+    // If payload is already in cache, close any open dialog and return
     if (secretValueCache.has(cacheKey)) {
       if (dialog) {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -1694,44 +1693,6 @@
     }
   });
 
-  function base64ToUtf8(str) {
-    try {
-      const binary = atob(str);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      return new TextDecoder('utf-8').decode(bytes);
-    } catch (e) {
-      return atob(str);
-    }
-  }
-
-  // Listen to intercepted events from MAIN world interceptor
-  window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data) return;
-
-    if (event.data.type === 'GSM_DIFF_TOKEN_FOUND' && event.data.token) {
-      chrome.runtime.sendMessage({
-        type: 'SET_MANUAL_TOKEN',
-        token: event.data.token
-      });
-      const badge = dockElement?.querySelector('.gsm-badge');
-      if (badge && !badge.textContent.includes('Selected')) {
-        badge.textContent = 'Auth Active';
-      }
-    } else if (event.data.type === 'GSM_DIFF_PAYLOAD_INTERCEPTED') {
-      const { url, name, base64Data } = event.data;
-      if (base64Data) {
-        const decoded = base64ToUtf8(base64Data);
-        const match = (name || url).match(/versions\/(\d+)/);
-        if (match && currentProject && currentSecret) {
-          const verId = match[1];
-          secretValueCache.set(`${currentProject}/${currentSecret}/${verId}`, decoded);
-        }
-      }
-    }
-  });
 
   // Live Dialog Observer: automatically capture secret payload whenever a dialog is open on the page
   const liveDialogObserver = new MutationObserver(() => {

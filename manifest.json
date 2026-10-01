@@ -34,16 +34,6 @@
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
-      "js": ["injected-interceptor.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "https://console.cloud.google.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*"
-      ],
       "js": [
         "diff-engine.js",
         "content.js"
