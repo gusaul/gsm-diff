@@ -17,6 +17,9 @@
   let currentSecret = null;
   let availableVersions = [];
   let selectedVersionIds = new Set();
+  let manualVersionA = '';
+  let manualVersionB = '';
+  let lastRenderedOptionsKey = '';
   let dockElement = null;
   let modalElement = null;
   let observer = null;
@@ -75,11 +78,6 @@
     expand: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>`,
     copy: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`
   };
-
-  /**
-  let manualVersionA = '';
-  let manualVersionB = '';
-  let lastRenderedOptionsKey = '';
 
   /**
    * Create or update the Floating Action Dock
@@ -1422,10 +1420,7 @@
     scanAndEnhanceVersionTable(context);
   }
 
-  // Periodic polling to catch SPA navigation & async table loading
-  setInterval(checkAndSyncPage, 1500);
-
-  // Debounced MutationObserver that ignores mutations inside our own dock or modal
+  // Debounced MutationObserver that reacts to DOM changes and ignores internal dock/modal mutations
   let observerTimeout = null;
   observer = new MutationObserver((mutations) => {
     // If all mutations are inside our own dock or modal, ignore them
@@ -1437,18 +1432,33 @@
 
     if (observerTimeout) clearTimeout(observerTimeout);
     observerTimeout = setTimeout(() => {
-      const context = parseConsoleUrl();
-      if (context.isSecretManager) {
-        scanAndEnhanceVersionTable(context);
-      }
-    }, 120);
+      checkAndSyncPage();
+    }, 150);
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // Listen for history state changes
+  // Hook SPA history state changes (no polling required)
   window.addEventListener('popstate', checkAndSyncPage);
   window.addEventListener('hashchange', checkAndSyncPage);
+
+  ['pushState', 'replaceState'].forEach(method => {
+    const orig = history[method];
+    if (typeof orig === 'function') {
+      history[method] = function(...args) {
+        const ret = orig.apply(this, args);
+        setTimeout(checkAndSyncPage, 50);
+        return ret;
+      };
+    }
+  });
+
+  // Initial execution on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkAndSyncPage);
+  } else {
+    checkAndSyncPage();
+  }
 
   // Listen for messages from popup or background
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
