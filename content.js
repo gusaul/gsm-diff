@@ -525,6 +525,134 @@
   }
 
   /**
+   * Launch a diff comparison between the latest version and the user's drafted new secret value
+   */
+  function launchDraftDiff(newSecretValue, context) {
+    if (!availableVersions || availableVersions.length === 0) {
+      scanAndEnhanceVersionTable(context);
+    }
+
+    if (!availableVersions || availableVersions.length === 0) {
+      alert('No previous versions were found for this secret to compare against. This may be the initial version.');
+      return;
+    }
+
+    const latestVer = availableVersions[0].id;
+    openDiffModal(context.project, context.secret, latestVer, 'draft', {
+      customValB: newSecretValue,
+      labelA: `Version ${latestVer} (Latest)`,
+      labelB: 'New Version (Draft)'
+    });
+  }
+
+  /**
+   * Scan DOM for the "Add version" dialog/panel and inject the "⚡ Preview Diff vs Latest" button
+   */
+  function scanAndEnhanceAddVersionDialog(context) {
+    if (!context.isSecretManager) return;
+
+    // Search for secret value textareas (in dialogs, forms, or panels)
+    const textareas = document.querySelectorAll('textarea');
+
+    textareas.forEach(textarea => {
+      // Skip if inside our own diff modal or dock
+      if (textarea.closest('#gsm-modal, #gsm-dock')) return;
+
+      // Check if we already enhanced this textarea or container
+      if (textarea.__gsm_preview_injected__ || textarea.closest('.gsm-preview-enhanced')) {
+        return;
+      }
+
+      // Check surrounding context: container should be a dialog, panel, or form
+      const container = textarea.closest('mat-dialog-container, [role="dialog"], .mat-mdc-dialog-container, .cdk-overlay-pane, cfc-panel, form') || textarea.parentElement;
+
+      // Verify it's related to secret value / add version
+      const containerText = (container?.textContent || '').toLowerCase();
+      const attrText = (
+        (textarea.getAttribute('name') || '') + ' ' +
+        (textarea.getAttribute('aria-label') || '') + ' ' +
+        (textarea.getAttribute('placeholder') || '') + ' ' +
+        (textarea.getAttribute('id') || '')
+      ).toLowerCase();
+
+      const isAddVersionContext = 
+        containerText.includes('add version') ||
+        containerText.includes('new version') ||
+        containerText.includes('create version') ||
+        containerText.includes('secret value') ||
+        containerText.includes('tambah versi') ||
+        containerText.includes('nilai rahasia') ||
+        attrText.includes('secret') ||
+        attrText.includes('payload') ||
+        attrText.includes('value');
+
+      if (!isAddVersionContext) return;
+
+      // Mark as injected
+      textarea.__gsm_preview_injected__ = true;
+      if (container && container.classList) {
+        container.classList.add('gsm-preview-enhanced');
+      }
+
+      // Create the Preview Diff button
+      const previewBtn = document.createElement('button');
+      previewBtn.type = 'button';
+      previewBtn.className = 'gsm-btn gsm-btn-secondary gsm-btn-preview-draft';
+      previewBtn.id = 'gsm-btn-preview-draft';
+      previewBtn.innerHTML = `⚡ Preview Diff vs Latest`;
+      previewBtn.title = 'Verify the diff between your newly entered value and the latest active version before saving';
+
+      previewBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const newSecretValue = textarea.value;
+        if (!newSecretValue || !newSecretValue.trim()) {
+          // Check if user selected a file upload input in the same container
+          const fileInput = container?.querySelector('input[type="file"]');
+          if (fileInput && fileInput.files && fileInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              launchDraftDiff(reader.result, context);
+            };
+            reader.readAsText(fileInput.files[0]);
+            return;
+          }
+
+          alert('Please enter or paste the new secret value in the text box first.');
+          textarea.focus();
+          return;
+        }
+
+        launchDraftDiff(newSecretValue, context);
+      });
+
+      // Determine injection location:
+      // Preferred location: In the dialog actions bar next to the "Add version" button
+      const actionsContainer = container?.querySelector(
+        'mat-dialog-actions, [mat-dialog-actions], .mat-mdc-dialog-actions, .dialog-actions, .button-bar, .actions'
+      );
+
+      if (actionsContainer) {
+        const primaryBtn = actionsContainer.querySelector(
+          'button[type="submit"], button.mat-primary, button.mat-mdc-unelevated-button, button:last-child'
+        );
+        if (primaryBtn) {
+          actionsContainer.insertBefore(previewBtn, primaryBtn);
+        } else {
+          actionsContainer.appendChild(previewBtn);
+        }
+      } else {
+        // Fallback: insert directly below the textarea in a neat action bar
+        const bar = document.createElement('div');
+        bar.className = 'gsm-draft-preview-bar';
+        bar.appendChild(previewBtn);
+        textarea.insertAdjacentElement('afterend', bar);
+      }
+    });
+  }
+
+  /**
    * Fetch secret version value via Background script (using Google OAuth token)
    */
   async function fetchSecretValue(project, secret, version) {
@@ -566,10 +694,44 @@
   }
 
   /**
+   * Helper to retrieve a secret version value (from cache, mock values, API, or DOM UI fallback)
+   */
+  async function fetchVersionValue(project, secret, ver, statusP, statusSub) {
+    const cacheKey = `${project}/${secret}/${ver}`;
+    const cached = secretValueCache.get(cacheKey);
+    if (cached) return cached;
+
+    // Check mock values for local test environment
+    if (window.__GSM_MOCK_VALUES__ && window.__GSM_MOCK_VALUES__[ver]) {
+      const val = window.__GSM_MOCK_VALUES__[ver];
+      secretValueCache.set(cacheKey, val);
+      return val;
+    }
+
+    try {
+      const val = await fetchSecretValue(project, secret, ver);
+      secretValueCache.set(cacheKey, val);
+      return val;
+    } catch (apiErr) {
+      if (apiErr.message.includes('NO_AUTH_TOKEN') || apiErr.code === 'NO_AUTH_TOKEN') {
+        if (statusP) statusP.textContent = `Extracting Version ${ver} via Console UI...`;
+        if (statusSub) statusSub.textContent = 'Automating native "View secret value" interaction (no token required)';
+        const val = await autoFetchViaDom(ver);
+        secretValueCache.set(cacheKey, val);
+        return val;
+      }
+      throw apiErr;
+    }
+  }
+
+  /**
    * Open the Diff Modal
    */
-  async function openDiffModal(project, secret, verA, verB) {
+  async function openDiffModal(project, secret, verA, verB, options = {}) {
     closeDiffModal();
+
+    const labelA = options.labelA || `Version ${verA}`;
+    const labelB = options.labelB || `Version ${verB}`;
 
     modalElement = document.createElement('div');
     modalElement.id = 'gsm-modal-backdrop';
@@ -578,11 +740,11 @@
       <div class="gsm-modal">
         <div class="gsm-modal-header">
           <div class="gsm-modal-title-group">
-            <span class="gsm-modal-title">${ICONS.key} GSM Diff: ${secret}</span>
+            <span class="gsm-modal-title">${ICONS.key} GSM Diff: ${escapeHtml(secret)}</span>
             <div class="gsm-version-chip-group">
-              <span class="gsm-version-chip">Version ${verA}</span>
+              <span class="gsm-version-chip">${escapeHtml(labelA)}</span>
               <button class="gsm-swap-btn" id="gsm-modal-swap" title="Swap Version A and B">${ICONS.swap}</button>
-              <span class="gsm-version-chip">Version ${verB}</span>
+              <span class="gsm-version-chip">${escapeHtml(labelB)}</span>
             </div>
           </div>
           <button class="gsm-icon-btn" id="gsm-modal-close" title="Close (Esc)">
@@ -618,7 +780,7 @@
         <div class="gsm-modal-body" id="gsm-modal-content">
           <div class="gsm-loading-state">
             <div class="gsm-spinner"></div>
-            <p>Retrieving secret values for Version ${verA} and Version ${verB}...</p>
+            <p>Retrieving secret values for ${escapeHtml(labelA)} and ${escapeHtml(labelB)}...</p>
             <span style="font-size: 12px; color: var(--gsm-text-muted);">Accessing Secret Manager via Google Cloud session token</span>
           </div>
         </div>
@@ -641,98 +803,69 @@
     };
     window.addEventListener('keydown', onKeyDown);
 
+    let valA = options.customValA !== undefined ? options.customValA : null;
+    let valB = options.customValB !== undefined ? options.customValB : null;
+
     modalElement.querySelector('#gsm-modal-swap')?.addEventListener('click', () => {
-      openDiffModal(project, secret, verB, verA);
+      openDiffModal(project, secret, verB, verA, {
+        customValA: valB,
+        customValB: valA,
+        labelA: labelB,
+        labelB: labelA
+      });
     });
 
     // Toolbar button event handlers
     modalElement.querySelector('#gsm-toggle-split')?.addEventListener('click', () => {
       diffSettings.viewMode = 'split';
       updateToolbarState();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
 
     modalElement.querySelector('#gsm-toggle-unified')?.addEventListener('click', () => {
       diffSettings.viewMode = 'unified';
       updateToolbarState();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
 
     modalElement.querySelector('#gsm-toggle-json')?.addEventListener('click', () => {
       diffSettings.prettifyJson = !diffSettings.prettifyJson;
       updateToolbarState();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
 
     modalElement.querySelector('#gsm-toggle-ws')?.addEventListener('click', () => {
       diffSettings.ignoreWhitespace = !diffSettings.ignoreWhitespace;
       updateToolbarState();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
 
     modalElement.querySelector('#gsm-toggle-mask')?.addEventListener('click', () => {
       diffSettings.maskSecrets = !diffSettings.maskSecrets;
       updateToolbarState();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
 
     modalElement.querySelector('#gsm-diff-search')?.addEventListener('input', (e) => {
       diffSettings.searchQuery = e.target.value.toLowerCase();
-      renderActiveDiff(valA, valB, verA, verB);
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     });
-
-    let valA = '';
-    let valB = '';
 
     const statusP = modalElement?.querySelector('#gsm-modal-content p');
     const statusSub = modalElement?.querySelector('#gsm-modal-content span');
 
     try {
-      // 1. Check if both versions are already cached (from previous fetch or network interceptor)
-      const cachedA = secretValueCache.get(`${project}/${secret}/${verA}`);
-      const cachedB = secretValueCache.get(`${project}/${secret}/${verB}`);
-
-      if (cachedA && cachedB) {
-        valA = cachedA;
-        valB = cachedB;
-      } else {
-        // 2. Try fetching via API first (works if user set gcloud token or active OAuth token)
-        try {
-          [valA, valB] = await Promise.all([
-            fetchSecretValue(project, secret, verA),
-            fetchSecretValue(project, secret, verB)
-          ]);
-        } catch (apiErr) {
-          // If API fails because no auth token is active, automatically run UI Auto-Fetch!
-          if (apiErr.message.includes('NO_AUTH_TOKEN') || apiErr.code === 'NO_AUTH_TOKEN') {
-            console.log('[GSM Diff] No API token available. Running UI Auto-Fetch directly via Console...');
-            if (statusP) statusP.textContent = `Extracting Version ${verA} and Version ${verB} via Console UI...`;
-            if (statusSub) statusSub.textContent = 'Automating native "View secret value" interaction (no token required)';
-
-            let aVal = secretValueCache.get(`${project}/${secret}/${verA}`);
-            let bVal = secretValueCache.get(`${project}/${secret}/${verB}`);
-
-            if (!aVal) {
-              if (statusP) statusP.textContent = `Extracting Version ${verA} via Console UI...`;
-              aVal = await autoFetchViaDom(verA);
-              secretValueCache.set(`${project}/${secret}/${verA}`, aVal);
-            }
-
-            if (!bVal) {
-              if (statusP) statusP.textContent = `Extracting Version ${verB} via Console UI...`;
-              bVal = await autoFetchViaDom(verB);
-              secretValueCache.set(`${project}/${secret}/${verB}`, bVal);
-            }
-
-            valA = aVal;
-            valB = bVal;
-          } else {
-            throw apiErr;
-          }
-        }
+      if (valA === null) {
+        if (statusP) statusP.textContent = `Retrieving secret value for ${labelA}...`;
+        valA = await fetchVersionValue(project, secret, verA, statusP, statusSub);
       }
 
-      renderActiveDiff(valA, valB, verA, verB);
+      if (valB === null) {
+        if (statusP) statusP.textContent = `Retrieving secret value for ${labelB}...`;
+        valB = await fetchVersionValue(project, secret, verB, statusP, statusSub);
+      }
+
+      renderActiveDiff(valA, valB, verA, verB, labelA, labelB);
     } catch (err) {
       console.warn('[GSM Diff] Failed to fetch secret values:', err);
       renderErrorState(err.message, project, secret, verA, verB);
@@ -757,10 +890,13 @@
   /**
    * Render the active diff in either Split or Unified mode
    */
-  function renderActiveDiff(rawA, rawB, verA, verB) {
+  function renderActiveDiff(rawA, rawB, verA, verB, labelA, labelB) {
     const container = modalElement?.querySelector('#gsm-modal-content');
     const statsBox = modalElement?.querySelector('#gsm-diff-stats-box');
     if (!container) return;
+
+    const lblA = labelA || `Version ${verA}`;
+    const lblB = labelB || `Version ${verB}`;
 
     let textA = diffSettings.maskSecrets ? window.GSMDiffEngine.maskSecretContent(rawA) : rawA;
     let textB = diffSettings.maskSecrets ? window.GSMDiffEngine.maskSecretContent(rawB) : rawB;
@@ -780,24 +916,26 @@
 
     // Attach copy & download patch listeners
     modalElement.querySelector('#gsm-btn-copy-patch').onclick = () => {
-      const patch = window.GSMDiffEngine.generatePatchText(textA, textB, `Version ${verA}`, `Version ${verB}`);
+      const patch = window.GSMDiffEngine.generatePatchText(textA, textB, lblA, lblB);
       navigator.clipboard.writeText(patch);
       alert('Diff patch copied to clipboard!');
     };
 
     modalElement.querySelector('#gsm-btn-download-patch').onclick = () => {
-      const patch = window.GSMDiffEngine.generatePatchText(textA, textB, `Version ${verA}`, `Version ${verB}`);
+      const patch = window.GSMDiffEngine.generatePatchText(textA, textB, lblA, lblB);
       const blob = new Blob([patch], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `gsm-diff-${currentSecret}-v${verA}-v${verB}.patch`;
+      const safeA = lblA.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeB = lblB.replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `gsm-diff-${currentSecret}-${safeA}-vs-${safeB}.patch`;
       a.click();
       URL.revokeObjectURL(url);
     };
 
     if (diffSettings.viewMode === 'split') {
-      renderSplitDiff(diff, verA, verB, container);
+      renderSplitDiff(diff, verA, verB, container, lblA, lblB, rawA, rawB);
     } else {
       renderUnifiedDiff(diff, container);
     }
@@ -806,7 +944,7 @@
   /**
    * Render Side-by-Side (Split) Diff View
    */
-  function renderSplitDiff(diff, verA, verB, container) {
+  function renderSplitDiff(diff, verA, verB, container, labelA, labelB, rawA, rawB) {
     const rows = window.GSMDiffEngine.generateSideBySideRows(diff);
     const search = diffSettings.searchQuery;
 
@@ -887,7 +1025,7 @@
       <div class="gsm-split-container">
         <div class="gsm-split-pane" id="gsm-pane-left">
           <div class="gsm-split-header">
-            <span>Version ${verA} (Base / Old)</span>
+            <span>${escapeHtml(labelA || `Version ${verA} (Base / Old)`)}</span>
             <button class="gsm-copy-btn" id="gsm-copy-left">Copy Value</button>
           </div>
           <table class="gsm-diff-table">
@@ -897,7 +1035,7 @@
 
         <div class="gsm-split-pane" id="gsm-pane-right">
           <div class="gsm-split-header">
-            <span>Version ${verB} (Target / New)</span>
+            <span>${escapeHtml(labelB || `Version ${verB} (Target / New)`)}</span>
             <button class="gsm-copy-btn" id="gsm-copy-right">Copy Value</button>
           </div>
           <table class="gsm-diff-table">
@@ -932,13 +1070,15 @@
 
     // Copy buttons
     container.querySelector('#gsm-copy-left')?.addEventListener('click', () => {
-      navigator.clipboard.writeText(secretValueCache.get(`${currentProject}/${currentSecret}/${verA}`) || '');
-      alert(`Version ${verA} value copied!`);
+      const textToCopy = rawA !== undefined && rawA !== null ? rawA : (secretValueCache.get(`${currentProject}/${currentSecret}/${verA}`) || '');
+      navigator.clipboard.writeText(textToCopy);
+      alert(`${labelA || `Version ${verA}`} value copied!`);
     });
 
     container.querySelector('#gsm-copy-right')?.addEventListener('click', () => {
-      navigator.clipboard.writeText(secretValueCache.get(`${currentProject}/${currentSecret}/${verB}`) || '');
-      alert(`Version ${verB} value copied!`);
+      const textToCopy = rawB !== undefined && rawB !== null ? rawB : (secretValueCache.get(`${currentProject}/${currentSecret}/${verB}`) || '');
+      navigator.clipboard.writeText(textToCopy);
+      alert(`${labelB || `Version ${verB}`} value copied!`);
     });
   }
 
@@ -1418,6 +1558,7 @@
 
     ensureDock(context);
     scanAndEnhanceVersionTable(context);
+    scanAndEnhanceAddVersionDialog(context);
   }
 
   // Debounced MutationObserver that reacts to DOM changes and ignores internal dock/modal mutations

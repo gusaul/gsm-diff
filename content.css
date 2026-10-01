@@ -263,6 +263,26 @@
   display: none !important;
 }
 
+/* Add Version Dialog - Draft Preview Button */
+.gsm-btn-preview-draft {
+  background: var(--gsm-bg-surface);
+  color: var(--gsm-primary);
+  border: 1px solid var(--gsm-primary);
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.gsm-btn-preview-draft:hover {
+  background: var(--gsm-primary-bg);
+  border-color: var(--gsm-primary-hover);
+}
+
+.gsm-draft-preview-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+
 /* --- GSM Diff Modal --- */
 #gsm-modal-backdrop {
   position: fixed;

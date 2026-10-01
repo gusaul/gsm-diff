@@ -244,4 +244,37 @@ console.log('--- Testing DOM Locator Logic ---');
   console.log('✓ Diff modal row exclusion and swap logic verified');
 }
 
+// Test 5: Add Version Dialog Detection & Draft Value Diff Preview
+{
+  const latestValue = `# Database Configuration v3
+PORT=5432
+MAX_CONNECTIONS=50`;
+
+  const newDraftValue = `# Database Configuration v3
+PORT=5433
+MAX_CONNECTIONS=100
+ENABLE_SSL=true`;
+
+  // Compute diff between latest version and drafted new version
+  const GSMDiffEngine = require('../diff-engine.js');
+  const draftDiff = GSMDiffEngine.computeLineDiff(latestValue, newDraftValue);
+
+  assert.strictEqual(draftDiff.deletions, 2, 'Should detect 2 changed/deleted lines (PORT and MAX_CONNECTIONS)');
+  assert.strictEqual(draftDiff.additions, 3, 'Should detect 3 updated/added lines (PORT, MAX_CONNECTIONS, ENABLE_SSL)');
+
+  // Verify side-by-side rows pair up the changes
+  const sbsRows = GSMDiffEngine.generateSideBySideRows(draftDiff);
+  const portRow = sbsRows.find(r => r.type === 'modify' && r.left?.content.includes('PORT=5432'));
+  assert.ok(portRow, 'PORT change should be paired as a modify row');
+  assert.ok(portRow.right.content.includes('PORT=5433'));
+
+  // Test patch generation with custom draft labels
+  const patch = GSMDiffEngine.generatePatchText(latestValue, newDraftValue, 'Version 3 (Latest)', 'New Version (Draft)');
+  assert.ok(patch.includes('--- Version 3 (Latest)'));
+  assert.ok(patch.includes('+++ New Version (Draft)'));
+  assert.ok(patch.includes('+ENABLE_SSL=true'));
+
+  console.log('✓ Add Version draft diff computation and custom labels verified');
+}
+
 console.log('--- All Locator Tests Passed! ---');

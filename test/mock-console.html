@@ -179,6 +179,9 @@
       <div class="breadcrumb">Secret Manager &gt; Secrets &gt; production-database-config</div>
       <div class="title-row">
         <h1>production-database-config</h1>
+        <button class="gsm-btn gsm-btn-primary" id="mock-add-version-trigger">
+          + Add version
+        </button>
       </div>
     </div>
 
@@ -355,6 +358,43 @@ MAX_CONNECTIONS=150`
       document.querySelectorAll('tbody input[type="checkbox"]').forEach(cb => {
         cb.checked = isChecked;
         cb.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+
+    // Mock Add Version Dialog Trigger
+    document.querySelector('#mock-add-version-trigger')?.addEventListener('click', () => {
+      document.querySelector('.mat-mdc-dialog-container')?.remove();
+      const dialog = document.createElement('mat-dialog-container');
+      dialog.className = 'mat-mdc-dialog-container';
+      dialog.setAttribute('role', 'dialog');
+      dialog.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border: 1px solid #dadce0; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.3); z-index: 100000; width: 560px; padding: 24px;';
+      dialog.innerHTML = `
+        <h2 style="font-size: 18px; margin-bottom: 8px; font-weight: 500;">Add secret version</h2>
+        <p style="font-size: 13px; color: #5f6368; margin-bottom: 16px;">Enter or paste the secret value for the new version.</p>
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 6px; color: #3c4043;">Secret value *</label>
+          <textarea id="mock-secret-value-input" placeholder="Paste new secret value here..." style="width: 100%; height: 160px; font-family: monospace; font-size: 12px; padding: 10px; border: 1px solid #dadce0; border-radius: 4px; box-sizing: border-box;"># Database Configuration v4
+DATABASE_HOST="db-v2.prod.internal"
+PORT=5434
+DB_USER="app_prod_user"
+DB_PASSWORD="sk_test_newpass4200"
+REDIS_URL="redis://10.0.0.8:6379"
+JWT_SECRET="sk_test_supersecretjwtkey9988"
+ENABLE_NEW_SECURITY_HEADERS=true
+DEBUG=false
+MAX_CONNECTIONS=200</textarea>
+        </div>
+        <mat-dialog-actions style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="gsm-btn gsm-btn-secondary" id="mock-cancel-new-ver">Cancel</button>
+          <button class="gsm-btn gsm-btn-primary" id="mock-save-new-ver">Add version</button>
+        </mat-dialog-actions>
+      `;
+      document.body.appendChild(dialog);
+
+      dialog.querySelector('#mock-cancel-new-ver')?.addEventListener('click', () => dialog.remove());
+      dialog.querySelector('#mock-save-new-ver')?.addEventListener('click', () => {
+        alert('Mock: Version added successfully!');
+        dialog.remove();
       });
     });
 
