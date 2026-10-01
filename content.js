@@ -77,6 +77,11 @@
   };
 
   /**
+  let manualVersionA = '';
+  let manualVersionB = '';
+  let lastRenderedOptionsKey = '';
+
+  /**
    * Create or update the Floating Action Dock
    */
   function ensureDock(context) {
@@ -84,6 +89,7 @@
       if (dockElement) {
         dockElement.remove();
         dockElement = null;
+        lastRenderedOptionsKey = '';
       }
       return;
     }
@@ -91,40 +97,23 @@
     if (!dockElement) {
       dockElement = document.createElement('div');
       dockElement.id = 'gsm-dock';
+      // Prevent clicks inside dock from bubbling to GCP Console document handlers
+      dockElement.addEventListener('click', (e) => e.stopPropagation());
+      dockElement.addEventListener('mousedown', (e) => e.stopPropagation());
       document.body.appendChild(dockElement);
+      initDockDom(context);
     }
 
-    renderDockContent(context);
+    updateDockState(context);
   }
 
-  function renderDockContent(context) {
-    if (!dockElement) return;
-
-    let vA = '';
-    let vB = '';
-    const checked = Array.from(selectedVersionIds);
-    if (checked.length >= 2) {
-      vA = checked[0];
-      vB = checked[1];
-    } else if (checked.length === 1) {
-      vA = checked[0];
-      const other = availableVersions.find(v => v.id !== vA);
-      vB = other ? other.id : '';
-    } else {
-      vA = availableVersions[0]?.id || '';
-      vB = availableVersions[1]?.id || '';
-    }
-
-    const optionsHtml = availableVersions.map(v => 
-      `<option value="${v.id}">Version ${v.id} (${v.state || 'ENABLED'})</option>`
-    ).join('');
-
+  function initDockDom(context) {
     dockElement.innerHTML = `
       <div class="gsm-dock-header" id="gsm-dock-toggle">
         <div class="gsm-dock-title">
           ${ICONS.key}
           <span>GSM Diff</span>
-          <span class="gsm-badge">${selectedVersionIds.size} Selected</span>
+          <span class="gsm-badge" id="gsm-dock-badge">0 Selected</span>
         </div>
         <div class="gsm-dock-controls">
           <button class="gsm-icon-btn" id="gsm-dock-min-btn" title="Toggle minimize">
@@ -134,19 +123,21 @@
       </div>
       <div class="gsm-dock-body">
         <div class="gsm-secret-meta">
-          <span class="gsm-secret-name">${context.secret}</span>
-          <span class="gsm-secret-sub">Project: ${context.project || 'current'}</span>
+          <span class="gsm-secret-name" id="gsm-dock-secret-name">${escapeHtml(context.secret)}</span>
+          <span class="gsm-secret-sub" id="gsm-dock-project-sub">Project: ${escapeHtml(context.project || 'current')}</span>
         </div>
 
         <div class="gsm-selection-bar">
-          <select id="gsm-select-va" class="gsm-select" title="First Version">
+          <select id="gsm-select-va" class="gsm-select" title="First Version (Left / Base)">
             <option value="">Select Version A</option>
-            ${optionsHtml}
           </select>
-          <span style="font-weight: bold; color: var(--gsm-text-muted);">vs</span>
-          <select id="gsm-select-vb" class="gsm-select" title="Second Version">
+          <button type="button" class="gsm-swap-btn" id="gsm-btn-swap" title="Switch Version A and Version B">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/>
+            </svg>
+          </button>
+          <select id="gsm-select-vb" class="gsm-select" title="Second Version (Right / Target)">
             <option value="">Select Version B</option>
-            ${optionsHtml}
           </select>
         </div>
 
@@ -161,33 +152,56 @@
       </div>
     `;
 
-    // Set select values
-    const selA = dockElement.querySelector('#gsm-select-va');
-    const selB = dockElement.querySelector('#gsm-select-vb');
-    if (selA && vA) selA.value = vA;
-    if (selB && vB) selB.value = vB;
-
-    // Attach listeners
+    // Attach listeners once
     dockElement.querySelector('#gsm-dock-toggle')?.addEventListener('click', (e) => {
-      if (e.target.closest('#gsm-dock-min-btn')) {
+      if (e.target.closest('#gsm-dock-min-btn') || e.target.closest('.gsm-dock-title')) {
         dockElement.classList.toggle('gsm-minimized');
       }
     });
 
+    const selA = dockElement.querySelector('#gsm-select-va');
+    const selB = dockElement.querySelector('#gsm-select-vb');
+    const swapBtn = dockElement.querySelector('#gsm-btn-swap');
+
     selA?.addEventListener('change', (e) => {
+      manualVersionA = e.target.value;
       selectedVersionIds.clear();
-      if (e.target.value) selectedVersionIds.add(e.target.value);
+      if (manualVersionA) selectedVersionIds.add(manualVersionA);
       if (selB?.value) selectedVersionIds.add(selB.value);
       updateNativeCheckboxesFromSelection();
-      renderDockContent(context);
+      updateDockState(context);
     });
 
     selB?.addEventListener('change', (e) => {
+      manualVersionB = e.target.value;
       selectedVersionIds.clear();
       if (selA?.value) selectedVersionIds.add(selA.value);
-      if (e.target.value) selectedVersionIds.add(e.target.value);
+      if (manualVersionB) selectedVersionIds.add(manualVersionB);
       updateNativeCheckboxesFromSelection();
-      renderDockContent(context);
+      updateDockState(context);
+    });
+
+    swapBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!selA || !selB) return;
+
+      const oldA = selA.value;
+      const oldB = selB.value;
+      selA.value = oldB;
+      selB.value = oldA;
+
+      manualVersionA = selA.value;
+      manualVersionB = selB.value;
+
+      swapBtn.classList.add('gsm-rotating');
+      setTimeout(() => swapBtn.classList.remove('gsm-rotating'), 250);
+
+      selectedVersionIds.clear();
+      if (selA.value) selectedVersionIds.add(selA.value);
+      if (selB.value) selectedVersionIds.add(selB.value);
+      updateNativeCheckboxesFromSelection();
+      updateDockState(context);
     });
 
     dockElement.querySelector('#gsm-btn-compare')?.addEventListener('click', () => {
@@ -205,10 +219,100 @@
         alert('At least two versions are needed to compare.');
         return;
       }
-      // Sort numerically descending
       const sorted = [...availableVersions].sort((a, b) => Number(b.id) - Number(a.id));
-      openDiffModal(context.project, context.secret, sorted[1].id, sorted[0].id);
+      const vLatest = sorted[0].id;
+      const vPrev = sorted[1].id;
+      manualVersionA = vPrev;
+      manualVersionB = vLatest;
+      if (selA) selA.value = vPrev;
+      if (selB) selB.value = vLatest;
+      selectedVersionIds.clear();
+      selectedVersionIds.add(vPrev);
+      selectedVersionIds.add(vLatest);
+      updateNativeCheckboxesFromSelection();
+      updateDockState(context);
+      openDiffModal(context.project, context.secret, vPrev, vLatest);
     });
+  }
+
+  function updateDockState(context) {
+    if (!dockElement) return;
+
+    // Update badge
+    const badge = dockElement.querySelector('#gsm-dock-badge');
+    if (badge) {
+      badge.textContent = `${selectedVersionIds.size} Selected`;
+    }
+
+    // Update secret meta
+    const nameEl = dockElement.querySelector('#gsm-dock-secret-name');
+    if (nameEl && nameEl.textContent !== context.secret) {
+      nameEl.textContent = context.secret;
+    }
+    const subEl = dockElement.querySelector('#gsm-dock-project-sub');
+    if (subEl) {
+      const subText = `Project: ${context.project || 'current'}`;
+      if (subEl.textContent !== subText) {
+        subEl.textContent = subText;
+      }
+    }
+
+    const selA = dockElement.querySelector('#gsm-select-va');
+    const selB = dockElement.querySelector('#gsm-select-vb');
+    if (!selA || !selB) return;
+
+    // Determine target versions vA and vB
+    let vA = '';
+    let vB = '';
+    const checked = Array.from(selectedVersionIds);
+
+    if (manualVersionA && (selectedVersionIds.size === 0 || selectedVersionIds.has(manualVersionA))) {
+      vA = manualVersionA;
+    } else if (checked.length > 0) {
+      vA = checked[0];
+    } else {
+      vA = availableVersions[0]?.id || '';
+    }
+
+    if (manualVersionB && manualVersionB !== vA && (selectedVersionIds.size === 0 || selectedVersionIds.has(manualVersionB))) {
+      vB = manualVersionB;
+    } else if (checked.length >= 2) {
+      vB = checked.find(v => v !== vA) || checked[1];
+    } else {
+      const other = availableVersions.find(v => v.id !== vA);
+      vB = other ? other.id : '';
+    }
+
+    // Update option list ONLY if availableVersions changed
+    const currentOptionsKey = availableVersions.map(v => `${v.id}:${v.state || ''}`).join('|');
+    if (currentOptionsKey !== lastRenderedOptionsKey) {
+      lastRenderedOptionsKey = currentOptionsKey;
+      const optsA = `<option value="">Select Version A</option>` + availableVersions.map(v =>
+        `<option value="${v.id}">Version ${v.id} (${v.state || 'ENABLED'})</option>`
+      ).join('');
+      const optsB = `<option value="">Select Version B</option>` + availableVersions.map(v =>
+        `<option value="${v.id}">Version ${v.id} (${v.state || 'ENABLED'})</option>`
+      ).join('');
+
+      const currValA = selA.value || vA;
+      const currValB = selB.value || vB;
+      selA.innerHTML = optsA;
+      selB.innerHTML = optsB;
+      selA.value = currValA;
+      selB.value = currValB;
+    }
+
+    // Only set values if the user is NOT actively interacting with the select element
+    if (document.activeElement !== selA && vA && selA.value !== vA) {
+      selA.value = vA;
+    }
+    if (document.activeElement !== selB && vB && selB.value !== vB) {
+      selB.value = vB;
+    }
+  }
+
+  function renderDockContent(context) {
+    updateDockState(context);
   }
 
   /**
@@ -314,8 +418,8 @@
     const detected = new Map();
 
     rows.forEach(row => {
-      // Exclude header rows and paginator rows
-      if (row.closest('thead, mat-header-row, mat-paginator, cfc-table-paginator, [role="columnheader"]')) {
+      // Exclude header rows, paginator rows, and any rows inside our dock / diff modal
+      if (row.closest('#gsm-modal, #gsm-dock, .gsm-modal-backdrop, .gsm-diff-container, .gsm-diff-table, [id^="gsm-"], thead, mat-header-row, mat-paginator, cfc-table-paginator, [role="columnheader"]')) {
         return;
       }
 
@@ -345,8 +449,9 @@
       if (versionNumber) {
         detected.set(versionNumber, { id: versionNumber, row });
 
-        // Clean up any legacy custom injected checkbox wrapper
+        // Clean up any legacy custom injected checkbox wrapper or diff button
         row.querySelector('.gsm-row-checkbox-wrapper')?.remove();
+        row.querySelectorAll('.gsm-row-diff-btn').forEach(btn => btn.remove());
 
         // Tag row with data-gsm-version for instant and reliable lookup
         row.setAttribute('data-gsm-version', versionNumber);
@@ -386,23 +491,6 @@
             }
           } catch (e) {}
         }
-
-        // Inject row "Diff with prev" button if not already present
-        if (!row.querySelector('.gsm-row-diff-btn')) {
-          const actionCell = row.querySelector('button[aria-label*="Action"], button[aria-label*="More"], mat-icon, cfc-icon')?.parentElement || row.lastElementChild;
-          if (actionCell && Number(versionNumber) > 1) {
-            const diffBtn = document.createElement('button');
-            diffBtn.className = 'gsm-row-diff-btn';
-            diffBtn.title = `Compare Version ${versionNumber} with previous version (${Number(versionNumber) - 1})`;
-            diffBtn.innerHTML = `⇄ Diff`;
-            diffBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              openDiffModal(context.project, context.secret, String(Number(versionNumber) - 1), versionNumber);
-            });
-            actionCell.appendChild(diffBtn);
-          }
-        }
       }
     });
 
@@ -428,9 +516,12 @@
         .map(v => ({ id: v.id, state: 'ENABLED' }))
         .sort((a, b) => Number(b.id) - Number(a.id));
 
-      if (sorted.length !== availableVersions.length) {
+      const isDifferent = sorted.length !== availableVersions.length ||
+        sorted.some((v, idx) => v.id !== availableVersions[idx]?.id);
+
+      if (isDifferent) {
         availableVersions = sorted;
-        renderDockContent(context);
+        updateDockState(context);
       }
     }
   }
@@ -1322,6 +1413,9 @@
       currentSecret = context.secret;
       selectedVersionIds.clear();
       availableVersions = [];
+      manualVersionA = '';
+      manualVersionB = '';
+      lastRenderedOptionsKey = '';
     }
 
     ensureDock(context);
@@ -1329,14 +1423,25 @@
   }
 
   // Periodic polling to catch SPA navigation & async table loading
-  setInterval(checkAndSyncPage, 1200);
+  setInterval(checkAndSyncPage, 1500);
 
-  // MutationObserver for instant DOM updates
-  observer = new MutationObserver(() => {
-    const context = parseConsoleUrl();
-    if (context.isSecretManager) {
-      scanAndEnhanceVersionTable(context);
-    }
+  // Debounced MutationObserver that ignores mutations inside our own dock or modal
+  let observerTimeout = null;
+  observer = new MutationObserver((mutations) => {
+    // If all mutations are inside our own dock or modal, ignore them
+    const allInternal = mutations.every(m => {
+      const t = m.target;
+      return t && (t.closest?.('#gsm-dock, #gsm-modal') || t.id === 'gsm-dock' || t.id === 'gsm-modal');
+    });
+    if (allInternal) return;
+
+    if (observerTimeout) clearTimeout(observerTimeout);
+    observerTimeout = setTimeout(() => {
+      const context = parseConsoleUrl();
+      if (context.isSecretManager) {
+        scanAndEnhanceVersionTable(context);
+      }
+    }, 120);
   });
 
   observer.observe(document.body, { childList: true, subtree: true });

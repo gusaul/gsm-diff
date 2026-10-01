@@ -178,6 +178,37 @@
   outline: none;
 }
 
+.gsm-swap-btn {
+  background: var(--gsm-bg-surface);
+  border: 1px solid var(--gsm-border);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--gsm-text-muted);
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+}
+
+.gsm-swap-btn:hover {
+  background: var(--gsm-primary-bg);
+  color: var(--gsm-primary);
+  border-color: var(--gsm-primary);
+  transform: scale(1.12);
+}
+
+.gsm-swap-btn:active {
+  transform: scale(0.95);
+}
+
+.gsm-swap-btn.gsm-rotating {
+  transform: rotate(180deg);
+}
+
 .gsm-dock-actions {
   display: flex;
   gap: 8px;
@@ -223,38 +254,13 @@
   cursor: not-allowed;
 }
 
-/* Injected row elements */
+/* Injected row elements - hidden */
 .gsm-row-checkbox-wrapper {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-
-.gsm-row-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--gsm-primary);
+  display: none !important;
 }
 
 .gsm-row-diff-btn {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 11px;
-  background: var(--gsm-primary-bg);
-  color: var(--gsm-primary);
-  border: 1px solid var(--gsm-primary);
-  border-radius: 4px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.gsm-row-diff-btn:hover {
-  background: var(--gsm-primary);
-  color: #fff;
+  display: none !important;
 }
 
 /* --- GSM Diff Modal --- */

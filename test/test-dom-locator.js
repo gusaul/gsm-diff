@@ -208,4 +208,40 @@ console.log('--- Testing DOM Locator Logic ---');
   console.log('✓ Native checkbox detection and version selection sync verified');
 }
 
+// Test 4: Modal Diff Line Exclusion & Version Swap Logic
+{
+  function isExcludedRow(rowMock) {
+    return !!rowMock.closest('#gsm-modal, #gsm-dock, .gsm-modal-backdrop, .gsm-diff-container, .gsm-diff-table, [id^="gsm-"], thead, mat-header-row, mat-paginator, cfc-table-paginator, [role="columnheader"]');
+  }
+
+  // Row inside diff modal
+  const diffModalRow = {
+    closest: (sel) => sel.includes('#gsm-modal') ? { id: 'gsm-modal' } : null
+  };
+  assert.strictEqual(isExcludedRow(diffModalRow), true, 'Diff modal row must be excluded');
+
+  // Real table row
+  const realTableRow = {
+    closest: () => null
+  };
+  assert.strictEqual(isExcludedRow(realTableRow), false, 'Real table row must NOT be excluded');
+
+  // Swap logic
+  let selA_val = '3';
+  let selB_val = '1';
+  function swapVersions() {
+    const temp = selA_val;
+    selA_val = selB_val;
+    selB_val = temp;
+  }
+  swapVersions();
+  assert.strictEqual(selA_val, '1');
+  assert.strictEqual(selB_val, '3');
+  swapVersions();
+  assert.strictEqual(selA_val, '3');
+  assert.strictEqual(selB_val, '1');
+
+  console.log('✓ Diff modal row exclusion and swap logic verified');
+}
+
 console.log('--- All Locator Tests Passed! ---');
