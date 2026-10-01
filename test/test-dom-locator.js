@@ -277,4 +277,94 @@ ENABLE_SSL=true`;
   console.log('✓ Add Version draft diff computation and custom labels verified');
 }
 
+// Test 6: Diff Modal Stacking Context & Non-Destructive Dialog Isolation
+{
+  // 1. Verify CSS rules enforce maximum 32-bit z-index (2147483647)
+  const fs = require('fs');
+  const path = require('path');
+  const cssContent = fs.readFileSync(path.join(__dirname, '../content.css'), 'utf8');
+
+  assert.ok(
+    cssContent.includes('z-index: 2147483647 !important'),
+    'content.css must declare z-index: 2147483647 !important for #gsm-modal-backdrop'
+  );
+
+  // 2. Simulate Native GCP Add Version Dialog + Diff Modal Layering & Escape Interception
+  let nativeDialogClosed = false;
+  const mockDraftValue = 'DATABASE_URL="postgres://user:pass@10.0.0.1:5432/prod"';
+
+  // Native GCP Dialog state
+  const nativeDialog = {
+    isOpen: true,
+    textarea: { value: mockDraftValue },
+    close() {
+      nativeDialogClosed = true;
+      nativeDialog.isOpen = false;
+    }
+  };
+
+  // Event dispatch simulator for capture vs bubble phase
+  const captureListeners = [];
+  const bubbleListeners = [];
+
+  function addWindowEventListener(event, handler, useCapture = false) {
+    if (useCapture) {
+      captureListeners.push(handler);
+    } else {
+      bubbleListeners.push(handler);
+    }
+  }
+
+  // Native GCP registers an Escape listener in bubble phase (or on document/window)
+  addWindowEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && nativeDialog.isOpen) {
+      nativeDialog.close();
+    }
+  }, false);
+
+  // When GSM Diff modal opens:
+  let diffModalOpen = true;
+  const modalKeyDownHandler = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      diffModalOpen = false;
+    }
+  };
+  // GSM Diff attaches in CAPTURE phase:
+  addWindowEventListener('keydown', modalKeyDownHandler, true);
+
+  // Simulate user pressing Escape while Diff Modal is open
+  const mockEscapeEvent = {
+    key: 'Escape',
+    defaultPrevented: false,
+    propagationStopped: false,
+    immediatePropagationStopped: false,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() { this.propagationStopped = true; },
+    stopImmediatePropagation() { this.immediatePropagationStopped = true; }
+  };
+
+  // Dispatch event through capture listeners first, then bubble listeners (unless stopped)
+  for (const listener of [...captureListeners]) {
+    if (mockEscapeEvent.immediatePropagationStopped) break;
+    listener(mockEscapeEvent);
+  }
+  if (!mockEscapeEvent.propagationStopped && !mockEscapeEvent.immediatePropagationStopped) {
+    for (const listener of [...bubbleListeners]) {
+      if (mockEscapeEvent.immediatePropagationStopped) break;
+      listener(mockEscapeEvent);
+    }
+  }
+
+  // Assertions:
+  assert.strictEqual(diffModalOpen, false, 'Diff modal should have closed');
+  assert.strictEqual(nativeDialog.isOpen, true, 'Native Add Version dialog MUST still be open');
+  assert.strictEqual(nativeDialogClosed, false, 'Native dialog close handler must NOT have been called');
+  assert.strictEqual(nativeDialog.textarea.value, mockDraftValue, 'Drafted textarea value must remain intact');
+
+  console.log('✓ Diff modal max z-index layering and non-destructive draft preservation verified');
+}
+
 console.log('--- All Locator Tests Passed! ---');

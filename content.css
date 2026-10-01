@@ -285,17 +285,19 @@
 
 /* --- GSM Diff Modal --- */
 #gsm-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 100000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(3px);
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.65) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  backdrop-filter: blur(4px);
   animation: gsm-fade-in 0.2s ease-out;
 }
 
@@ -305,6 +307,8 @@
 }
 
 .gsm-modal {
+  position: relative !important;
+  z-index: 2147483647 !important;
   background: var(--gsm-bg-surface);
   border-radius: 12px;
   width: 95vw;
@@ -313,7 +317,7 @@
   max-height: 950px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   border: 1px solid var(--gsm-border);
   overflow: hidden;
   font-family: 'Google Sans', Roboto, -apple-system, sans-serif;

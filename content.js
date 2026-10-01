@@ -22,6 +22,8 @@
   let lastRenderedOptionsKey = '';
   let dockElement = null;
   let modalElement = null;
+  let modalKeyDownHandler = null;
+  let lastActiveElementBeforeModal = null;
   let observer = null;
   let isNavigating = false;
 
@@ -728,6 +730,10 @@
    * Open the Diff Modal
    */
   async function openDiffModal(project, secret, verA, verB, options = {}) {
+    if (!lastActiveElementBeforeModal) {
+      lastActiveElementBeforeModal = document.activeElement;
+    }
+
     closeDiffModal();
 
     const labelA = options.labelA || `Version ${verA}`;
@@ -735,6 +741,8 @@
 
     modalElement = document.createElement('div');
     modalElement.id = 'gsm-modal-backdrop';
+    modalElement.setAttribute('tabindex', '-1');
+    modalElement.style.cssText = 'position: fixed !important; top: 0px !important; left: 0px !important; right: 0px !important; bottom: 0px !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important;';
 
     modalElement.innerHTML = `
       <div class="gsm-modal">
@@ -789,19 +797,44 @@
 
     document.body.appendChild(modalElement);
 
-    // Modal Events
-    modalElement.querySelector('#gsm-modal-close')?.addEventListener('click', closeDiffModal);
-    modalElement.addEventListener('click', (e) => {
-      if (e.target === modalElement) closeDiffModal();
+    // Modal Events - Isolated so closing or clicking does not bubble to underlying dialogs
+    modalElement.querySelector('#gsm-modal-close')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      closeDiffModal();
     });
 
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
+    modalElement.addEventListener('click', (e) => {
+      if (e.target === modalElement) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         closeDiffModal();
-        window.removeEventListener('keydown', onKeyDown);
+      }
+    });
+
+    modalElement.querySelector('.gsm-modal')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Intercept Escape key in CAPTURE phase so underlying GCP dialogs never receive it
+    modalKeyDownHandler = (e) => {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        closeDiffModal();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', modalKeyDownHandler, true);
+
+    // Focus the modal to handle keyboard events immediately
+    setTimeout(() => {
+      try {
+        modalElement?.focus();
+      } catch (_) {}
+    }, 10);
 
     let valA = options.customValA !== undefined ? options.customValA : null;
     let valB = options.customValB !== undefined ? options.customValB : null;
@@ -1524,9 +1557,19 @@
   }
 
   function closeDiffModal() {
+    if (modalKeyDownHandler) {
+      window.removeEventListener('keydown', modalKeyDownHandler, true);
+      modalKeyDownHandler = null;
+    }
     if (modalElement) {
       modalElement.remove();
       modalElement = null;
+    }
+    if (lastActiveElementBeforeModal && typeof lastActiveElementBeforeModal.focus === 'function') {
+      try {
+        lastActiveElementBeforeModal.focus();
+      } catch (_) {}
+      lastActiveElementBeforeModal = null;
     }
   }
 
@@ -1567,7 +1610,7 @@
     // If all mutations are inside our own dock or modal, ignore them
     const allInternal = mutations.every(m => {
       const t = m.target;
-      return t && (t.closest?.('#gsm-dock, #gsm-modal') || t.id === 'gsm-dock' || t.id === 'gsm-modal');
+      return t && (t.closest?.('#gsm-dock, #gsm-modal-backdrop, .gsm-modal') || t.id === 'gsm-dock' || t.id === 'gsm-modal-backdrop');
     });
     if (allInternal) return;
 

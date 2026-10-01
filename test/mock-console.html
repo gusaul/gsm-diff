@@ -391,8 +391,22 @@ MAX_CONNECTIONS=200</textarea>
       `;
       document.body.appendChild(dialog);
 
-      dialog.querySelector('#mock-cancel-new-ver')?.addEventListener('click', () => dialog.remove());
+      // Simulate Angular Material closing dialog on Escape key
+      const onMockDialogKeyDown = (e) => {
+        if (e.key === 'Escape' && document.body.contains(dialog)) {
+          console.log('[Mock Console] Native dialog closed via Escape key');
+          dialog.remove();
+          window.removeEventListener('keydown', onMockDialogKeyDown);
+        }
+      };
+      window.addEventListener('keydown', onMockDialogKeyDown);
+
+      dialog.querySelector('#mock-cancel-new-ver')?.addEventListener('click', () => {
+        window.removeEventListener('keydown', onMockDialogKeyDown);
+        dialog.remove();
+      });
       dialog.querySelector('#mock-save-new-ver')?.addEventListener('click', () => {
+        window.removeEventListener('keydown', onMockDialogKeyDown);
         alert('Mock: Version added successfully!');
         dialog.remove();
       });
