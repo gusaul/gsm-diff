@@ -112,3 +112,15 @@ You can test the entire UI and diff algorithm locally without needing an active 
 - **Read-Only / Principle of Least Privilege**: GSM Diff only performs read-only requests (`:access`) to retrieve versions selected by the user. It never modifies, disables, or destroys secrets.
 - **Client-Side Only**: Secret values are processed completely in memory in your browser. No secret or token is ever transmitted to any third-party server.
 - **Session Auth**: Uses Google Cloud Console's native session authentication (`ya29...`) kept in memory session storage, expiring automatically when the browser closes.
+
+---
+
+## ⚖️ Disclaimer
+
+This is an independent open-source project and is not affiliated with, sponsored by, or endorsed by Google LLC or Google Cloud. Google Cloud and Secret Manager are registered trademarks of Google LLC.
+
+---
+
+## 📄 License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
