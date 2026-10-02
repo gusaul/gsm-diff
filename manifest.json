@@ -20,9 +20,7 @@
     "https://*.googleapis.com/*",
     "https://*.clients6.google.com/*",
     "https://clients6.google.com/*",
-    "https://console.cloud.google.com/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
+    "https://console.cloud.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,9 +28,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://console.cloud.google.com/*",
-        "http://localhost/*",
-        "http://127.0.0.1/*"
+        "https://console.cloud.google.com/*"
       ],
       "js": [
         "diff-engine.js",

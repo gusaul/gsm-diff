@@ -52,11 +52,6 @@
     const secretMatch = pathname.match(/\/security\/secret-manager\/secret\/([^/?#]+)/);
     let secret = secretMatch ? decodeURIComponent(secretMatch[1]) : null;
 
-    // Check for mock testing environment (localhost or elements with data-gsm-secret)
-    if (!secret && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      secret = url.searchParams.get('secret') || document.querySelector('[data-gsm-secret]')?.getAttribute('data-gsm-secret') || 'production-database-config';
-      project = project || document.querySelector('[data-gsm-project]')?.getAttribute('data-gsm-project') || 'my-gcp-project-prod';
-    }
 
     // Check if on Cloud Logging page
     const isLoggingPage = pathname.includes('/logs/');
@@ -997,6 +992,17 @@
     }
   }
 
+  function highlightSearchTerm(escapedText, search) {
+    if (!search) return escapedText;
+    try {
+      const escapedSearch = escapeHtml(search);
+      const safeRegex = new RegExp(`(${escapedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return escapedText.replaceAll(safeRegex, '<mark class="gsm-highlight-search">$1</mark>');
+    } catch (_) {
+      return escapedText;
+    }
+  }
+
   /**
    * Render Side-by-Side (Split) Diff View
    */
@@ -1022,10 +1028,7 @@
 
     function formatLineContent(text, search) {
       let escaped = escapeHtml(text);
-      if (search && escaped.toLowerCase().includes(search)) {
-        escaped = escaped.replaceAll(new RegExp(`(${search})`, 'gi'), `<mark class="gsm-highlight-search">$1</mark>`);
-      }
-      return escaped;
+      return highlightSearchTerm(escaped, search);
     }
 
     let leftRowsHtml = '';
@@ -1152,16 +1155,14 @@
       else if (r.type === 'insert') cls = 'gsm-row-insert';
 
       let escaped = escapeHtml(r.content);
-      if (search && escaped.toLowerCase().includes(search)) {
-        escaped = escaped.replaceAll(new RegExp(`(${search})`, 'gi'), `<mark class="gsm-highlight-search">$1</mark>`);
-      }
+      const contentBody = highlightSearchTerm(escaped, search);
 
       rowsHtml += `
         <tr class="gsm-diff-row ${cls}">
           <td class="gsm-line-num">${r.oldLineNum ?? ''}</td>
           <td class="gsm-line-num">${r.newLineNum ?? ''}</td>
           <td style="width: 20px; text-align: center; font-weight: bold; user-select: none;">${r.prefix}</td>
-          <td class="gsm-line-content">${escaped}</td>
+          <td class="gsm-line-content">${contentBody}</td>
         </tr>
       `;
     });

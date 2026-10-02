@@ -51,9 +51,10 @@ gsm-diff/
 
 ## 🚀 How to Install in Google Chrome
 
-1. Clone or navigate to the repository directory:
+1. Clone this repository:
    ```bash
-   cd /Users/gusaul/Work/cekat/gsm-diff
+   git clone https://github.com/<your-username>/gsm-diff.git
+   cd gsm-diff
    ```
 2. Open Google Chrome and navigate to:
    ```
@@ -61,7 +62,7 @@ gsm-diff/
    ```
 3. Enable **Developer mode** toggle in the top-right corner.
 4. Click **"Load unpacked"** in the top-left corner.
-5. Select the `/Users/gusaul/Work/cekat/gsm-diff` folder.
+5. Select the `gsm-diff` folder.
 6. The extension **"GCP Secret Manager & Log Diff (GSM Diff)"** is now active!
 
 ---
