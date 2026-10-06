@@ -53,7 +53,7 @@ gsm-diff/
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/<your-username>/gsm-diff.git
+   git clone git@github.com:gusaul/gsm-diff.git
    cd gsm-diff
    ```
 2. Open Google Chrome and navigate to:
@@ -90,22 +90,6 @@ gsm-diff/
   - Quick action: **"⚡ Compare Top 2 Versions"**.
   - **Quick Diff Tool** tab: Paste any two secrets, environment variables, or log records to diff them instantly without leaving your current view!
 
----
-
-## 🧪 Testing Locally
-
-You can test the entire UI and diff algorithm locally without needing an active GCP connection:
-
-1. Open `test/mock-console.html` directly in your browser:
-   ```bash
-   open test/mock-console.html
-   ```
-2. Or run the unit test suite:
-   ```bash
-   npm test
-   ```
-
----
 
 ## 🔐 Security & Permissions
 
